@@ -12,6 +12,10 @@ from utils.ms_auth import get_valid_access_token
 
 logger = logging.getLogger(__name__)
 
+# Cache to prevent duplicate joins (persists across scheduler runs in same worker process)
+# Format: {join_url: datetime_when_joined}
+RECENTLY_JOINED_CACHE = {}
+
 def check_and_join_meetings(user_id):
     """
     Check for upcoming meetings and auto-join if enabled.
@@ -103,10 +107,21 @@ def check_and_join_meetings(user_id):
             
             logger.info(f"Checking: '{subject}' | URL: {join_url[:40]}...")
             
-            # Check if already joined
+            # Check if already joined (from API)
             if join_url in joined_urls:
-                logger.info("   -> Already joined, skipping")
+                logger.info("   -> Already joined (API), skipping")
                 continue
+            
+            # Check local cache (prevents duplicates when API is slow)
+            if join_url in RECENTLY_JOINED_CACHE:
+                cache_time = RECENTLY_JOINED_CACHE[join_url]
+                age_seconds = (now - cache_time).total_seconds()
+                if age_seconds < 600:  # 10 minute cooldown
+                    logger.info(f"   -> Already joined {age_seconds:.0f}s ago (cache), skipping")
+                    continue
+                else:
+                    # Cache expired, remove it
+                    del RECENTLY_JOINED_CACHE[join_url]
             
             # Time check (only for calendar events with start time)
             if start_time_str:
@@ -142,6 +157,11 @@ def check_and_join_meetings(user_id):
                 websocket_url=user.bot_config.voice_bot_websocket_url,
                 token=recall_token
             )
+            
+            # Add to cache to prevent re-joining
+            RECENTLY_JOINED_CACHE[join_url] = now
+            logger.info(f"   -> Added to cache: {join_url[:30]}...")
+            
             joined_count += 1
                 
         return {"status": "success", "joined": joined_count}
