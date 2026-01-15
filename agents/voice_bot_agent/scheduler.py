@@ -1,4 +1,6 @@
 import logging
+import os
+import hashlib
 from datetime import datetime, timezone, timedelta
 from dateutil import parser
 import requests
@@ -12,9 +14,55 @@ from utils.ms_auth import get_valid_access_token
 
 logger = logging.getLogger(__name__)
 
-# Cache to prevent duplicate joins (persists across scheduler runs in same worker process)
-# Format: {join_url: datetime_when_joined}
-RECENTLY_JOINED_CACHE = {}
+# Redis connection for shared cache across worker processes
+_redis_client = None
+
+def get_redis_client():
+    """Get or create Redis client for caching."""
+    global _redis_client
+    if _redis_client is None:
+        redis_url = os.getenv("REDIS_URL")
+        if redis_url:
+            try:
+                import redis
+                _redis_client = redis.from_url(redis_url)
+                logger.info("Redis cache connected")
+            except Exception as e:
+                logger.warning(f"Redis not available: {e}")
+                return None
+    return _redis_client
+
+def was_recently_joined(join_url, cooldown_seconds=600):
+    """Check if this URL was joined recently (uses Redis if available)."""
+    cache_key = f"voice_join:{hashlib.md5(join_url.encode()).hexdigest()}"
+    
+    client = get_redis_client()
+    if client:
+        try:
+            exists = client.exists(cache_key)
+            if exists:
+                ttl = client.ttl(cache_key)
+                logger.info(f"   -> Redis: Already joined, {ttl}s remaining in cooldown")
+                return True
+            return False
+        except Exception as e:
+            logger.warning(f"Redis check failed: {e}")
+    return False
+
+def mark_as_joined(join_url, cooldown_seconds=600):
+    """Mark this URL as joined (uses Redis if available)."""
+    cache_key = f"voice_join:{hashlib.md5(join_url.encode()).hexdigest()}"
+    
+    client = get_redis_client()
+    if client:
+        try:
+            client.setex(cache_key, cooldown_seconds, "1")
+            logger.info(f"   -> Redis: Marked as joined (cooldown: {cooldown_seconds}s)")
+            return True
+        except Exception as e:
+            logger.warning(f"Redis set failed: {e}")
+    return False
+
 
 def check_and_join_meetings(user_id):
     """
@@ -79,12 +127,12 @@ def check_and_join_meetings(user_id):
                 unique_meetings[url] = {
                     "joinUrl": url,
                     "subject": chat.get("subject") or "Teams Call",
-                    "start_time": None  # Chats don't have start time
+                    "start_time": None
                 }
         
         logger.info(f"Total unique meetings to check: {len(unique_meetings)}")
         
-        # 4. Get already joined bots
+        # 4. Get already joined bots from Recall API
         recall_token = user.bot_config.recall_ai_token
         active_bots_data = list_bots_sync(token=recall_token)
         active_bots = active_bots_data.get('results', [])
@@ -107,21 +155,14 @@ def check_and_join_meetings(user_id):
             
             logger.info(f"Checking: '{subject}' | URL: {join_url[:40]}...")
             
-            # Check if already joined (from API)
+            # Check 1: Already joined (from Recall API)
             if join_url in joined_urls:
                 logger.info("   -> Already joined (API), skipping")
                 continue
             
-            # Check local cache (prevents duplicates when API is slow)
-            if join_url in RECENTLY_JOINED_CACHE:
-                cache_time = RECENTLY_JOINED_CACHE[join_url]
-                age_seconds = (now - cache_time).total_seconds()
-                if age_seconds < 600:  # 10 minute cooldown
-                    logger.info(f"   -> Already joined {age_seconds:.0f}s ago (cache), skipping")
-                    continue
-                else:
-                    # Cache expired, remove it
-                    del RECENTLY_JOINED_CACHE[join_url]
+            # Check 2: Recently joined (from Redis cache - shared across workers)
+            if was_recently_joined(join_url):
+                continue
             
             # Time check (only for calendar events with start time)
             if start_time_str:
@@ -148,6 +189,9 @@ def check_and_join_meetings(user_id):
             # JOIN!
             logger.info(f"   -> JOINING '{subject}'!")
             
+            # Mark as joined BEFORE creating bot (prevents race condition)
+            mark_as_joined(join_url, cooldown_seconds=600)
+            
             VoiceServerManager.start_server()
             
             create_bot_sync(
@@ -157,10 +201,6 @@ def check_and_join_meetings(user_id):
                 websocket_url=user.bot_config.voice_bot_websocket_url,
                 token=recall_token
             )
-            
-            # Add to cache to prevent re-joining
-            RECENTLY_JOINED_CACHE[join_url] = now
-            logger.info(f"   -> Added to cache: {join_url[:30]}...")
             
             joined_count += 1
                 
