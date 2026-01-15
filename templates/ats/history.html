@@ -1,0 +1,51 @@
+{% extends 'base.html' %}
+
+{% block title %}Scan History - ATS Agent{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1 class="page-title">Scan History</h1>
+</div>
+
+<div class="card">
+    <div class="card-body p-0">
+        {% if scans %}
+        <div class="table-responsive">
+            <table class="table mb-0">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Found</th>
+                        <th>Processed</th>
+                        <th>Scored</th>
+                        <th>Filtered</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for scan in scans %}
+                    <tr>
+                        <td>{{ scan.scan_started_at.strftime('%b %d, %Y %H:%M') }}</td>
+                        <td>{{ scan.total_cvs_found }}</td>
+                        <td>{{ scan.cvs_processed }}</td>
+                        <td>{{ scan.cvs_scored }}</td>
+                        <td>{{ scan.cvs_filtered_out }}</td>
+                        <td>
+                            <span
+                                class="badge {% if scan.status == 'completed' %}bg-success{% elif scan.status == 'failed' %}bg-danger{% else %}bg-warning{% endif %}">
+                                {{ scan.status }}
+                            </span>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="text-center text-muted py-5">
+            <p>No scan history</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

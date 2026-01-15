@@ -1,0 +1,260 @@
+{% extends 'base.html' %}
+
+{% block title %}ATS Agent Configuration{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1 class="page-title">
+        <i class="bi bi-sliders text-warning me-2"></i>
+        ATS Agent Configuration
+    </h1>
+    <p class="page-subtitle">Configure job requirements, filters, and CV sources</p>
+</div>
+
+<form method="POST" class="animate-in">
+    <!-- Agent Status -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="card-title mb-0">Agent Status</h5>
+        </div>
+        <div class="card-body">
+            <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" name="is_enabled" id="isEnabled" {% if config.is_enabled
+                    %}checked{% endif %}>
+                <label class="form-check-label" for="isEnabled">
+                    <strong>Enable Automated Scanning</strong>
+                    <br>
+                    <small class="text-muted">When enabled, CVs will be automatically scanned every 30 minutes from
+                        configured sources</small>
+                </label>
+            </div>
+        </div>
+    </div>
+
+    <!-- Job Details -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="card-title mb-0">Job Details</h5>
+        </div>
+        <div class="card-body">
+            <div class="mb-3">
+                <label class="form-label">Job Title *</label>
+                <input type="text" class="form-control" name="job_title" value="{{ config.job_title or '' }}" required>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Job Description *</label>
+                <textarea class="form-control" name="job_description" rows="6"
+                    required>{{ config.job_description or '' }}</textarea>
+                <small class="text-muted">Paste the full job description here</small>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Required Skills (comma-separated)</label>
+                <input type="text" class="form-control" name="required_skills"
+                    value="{{ ', '.join(config.required_skills) if config.required_skills else '' }}">
+                <small class="text-muted">E.g., Python, Django, PostgreSQL, REST APIs</small>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="card-title mb-0">Hard Filters</h5>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">Allowed Locations (comma-separated)</label>
+                    <input type="text" class="form-control" name="allowed_locations"
+                        value="{{ ', '.join(config.allowed_locations) if config.allowed_locations else '' }}">
+                    <small class="text-muted">E.g., Lahore, Karachi, Islamabad</small>
+                </div>
+                <div class="col-md-3 mb-3">
+                    <label class="form-label">Min Experience (years)</label>
+                    <input type="number" class="form-control" name="min_experience" value="{{ config.min_experience }}"
+                        min="0" max="50">
+                </div>
+                <div class="col-md-3 mb-3">
+                    <label class="form-label">Max Experience (years)</label>
+                    <input type="number" class="form-control" name="max_experience" value="{{ config.max_experience }}"
+                        min="0" max="50">
+                </div>
+            </div>
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">Minimum Education Level</label>
+                    <select class="form-select" name="min_education_level">
+                        <option value="">No requirement</option>
+                        <option value="High School" {% if config.min_education_level=='High School' %}selected{% endif
+                            %}>High School</option>
+                        <option value="Bachelors" {% if config.min_education_level=='Bachelors' %}selected{% endif %}>
+                            Bachelors</option>
+                        <option value="Masters" {% if config.min_education_level=='Masters' %}selected{% endif %}>
+                            Masters</option>
+                        <option value="PhD" {% if config.min_education_level=='PhD' %}selected{% endif %}>PhD</option>
+                    </select>
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">Must-Have Skills (comma-separated)</label>
+                    <input type="text" class="form-control" name="must_have_skills"
+                        value="{{ ', '.join(config.must_have_skills) if config.must_have_skills else '' }}">
+                    <small class="text-muted">CVs missing these WILL be rejected</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scoring Weights -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="card-title mb-0">Scoring Weights</h5>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-4 mb-3">
+                    <label class="form-label">Skills Match ({{ (config.weight_skills * 100)|int }}%)</label>
+                    <input type="range" class="form-range" name="weight_skills" value="{{ config.weight_skills }}"
+                        min="0" max="1" step="0.05"
+                        oninput="this.previousElementSibling.innerHTML='Skills Match (' + Math.round(this.value*100) + '%)'">
+                </div>
+                <div class="col-md-4 mb-3">
+                    <label class="form-label">Job Title ({{ (config.weight_title * 100)|int }}%)</label>
+                    <input type="range" class="form-range" name="weight_title" value="{{ config.weight_title }}" min="0"
+                        max="1" step="0.05"
+                        oninput="this.previousElementSibling.innerHTML='Job Title (' + Math.round(this.value*100) + '%)'">
+                </div>
+                <div class="col-md-4 mb-3">
+                    <label class="form-label">Experience ({{ (config.weight_experience * 100)|int }}%)</label>
+                    <input type="range" class="form-range" name="weight_experience"
+                        value="{{ config.weight_experience }}" min="0" max="1" step="0.05"
+                        oninput="this.previousElementSibling.innerHTML='Experience (' + Math.round(this.value*100) + '%)'">
+                </div>
+                <div class="col-md-4 mb-3">
+                    <label class="form-label">Education ({{ (config.weight_education * 100)|int }}%)</label>
+                    <input type="range" class="form-range" name="weight_education" value="{{ config.weight_education }}"
+                        min="0" max="1" step="0.05"
+                        oninput="this.previousElementSibling.innerHTML='Education (' + Math.round(this.value*100) + '%)'">
+                </div>
+                <div class="col-md-4 mb-3">
+                    <label class="form-label">Keywords ({{ (config.weight_keywords * 100)|int }}%)</label>
+                    <input type="range" class="form-range" name="weight_keywords" value="{{ config.weight_keywords }}"
+                        min="0" max="1" step="0.05"
+                        oninput="this.previousElementSibling.innerHTML='Keywords (' + Math.round(this.value*100) + '%)'">
+                </div>
+            </div>
+            <small class="text-muted">Weights should sum to 100%</small>
+        </div>
+    </div>
+
+    <!-- CV Sources -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="card-title mb-0">CV Sources</h5>
+        </div>
+        <div class="card-body">
+            <!-- OneDrive -->
+            <div class="form-check mb-3">
+                <input class="form-check-input" type="checkbox" name="onedrive_enabled" id="onedriveEnabled" {% if
+                    config.onedrive_enabled %}checked{% endif %}>
+                <label class="form-check-label" for="onedriveEnabled">
+                    <i class="bi bi-cloud-fill text-primary"></i> Scan OneDrive Folder
+                </label>
+            </div>
+            <div class="mb-3 ms-4">
+                <label class="form-label">Folder Path (e.g., CVs, Recruitment/Applicants)</label>
+                <input type="text" class="form-control" name="onedrive_folder_path"
+                    value="{{ config.onedrive_folder_path }}">
+                <small class="text-muted">Leave empty or "/" for root folder</small>
+            </div>
+
+            <!-- Email Inbox -->
+            <div class="form-check mb-3">
+                <input class="form-check-input" type="checkbox" name="email_inbox_enabled" id="emailInboxEnabled" {% if
+                    config.email_inbox_enabled %}checked{% endif %}>
+                <label class="form-check-label" for="emailInboxEnabled">
+                    <i class="bi bi-inbox-fill text-success"></i> Scan Email Inbox Attachments
+                </label>
+            </div>
+            <div class="mb-3 ms-4">
+                <small class="text-muted">Scans the last 50 emails in your inbox for CV attachments</small>
+            </div>
+
+            <!-- Email Folder -->
+            <div class="form-check mb-3">
+                <input class="form-check-input" type="checkbox" name="email_folder_enabled" id="emailFolderEnabled" {%
+                    if config.email_folder_enabled %}checked{% endif %}>
+                <label class="form-check-label" for="emailFolderEnabled">
+                    <i class="bi bi-folder-fill text-warning"></i> Scan Specific Email Folder
+                </label>
+            </div>
+            <div class="mb-3 ms-4">
+                <label class="form-label">Folder Name</label>
+                <input type="text" class="form-control" name="email_folder_name" value="{{ config.email_folder_name }}">
+                <small class="text-muted">E.g., "Recruitment", "Applications", "CVs"</small>
+            </div>
+
+            <!-- SharePoint -->
+            <div class="form-check mb-3">
+                <input class="form-check-input" type="checkbox" name="sharepoint_enabled" id="sharepointEnabled" {% if
+                    config.sharepoint_enabled %}checked{% endif %}>
+                <label class="form-check-label" for="sharepointEnabled">
+                    <i class="bi bi-folder-fill text-info"></i> Scan SharePoint Library
+                </label>
+            </div>
+            <div class="row ms-4">
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">Site URL</label>
+                    <input type="text" class="form-control" name="sharepoint_site_url"
+                        value="{{ config.sharepoint_site_url or '' }}">
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">Library Name</label>
+                    <input type="text" class="form-control" name="sharepoint_library"
+                        value="{{ config.sharepoint_library or '' }}">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Output Settings -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="card-title mb-0">Output Settings</h5>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">Top N Candidates</label>
+                    <input type="number" class="form-control" name="top_n_candidates"
+                        value="{{ config.top_n_candidates }}" min="1" max="100">
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">Minimum Score Threshold</label>
+                    <input type="number" class="form-control" name="min_threshold_score"
+                        value="{{ config.min_threshold_score }}" min="0" max="100">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Agent Status -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <div class="form-check">
+                <input class="form-check-input" type="checkbox" name="is_enabled" id="isEnabled" {% if config.is_enabled
+                    %}checked{% endif %}>
+                <label class="form-check-label" for="isEnabled">
+                    <strong>Agent Enabled</strong>
+                </label>
+            </div>
+        </div>
+    </div>
+
+    <div class="d-flex gap-2">
+        <button type="submit" class="btn btn-primary">
+            <i class="bi bi-save me-1"></i> Save Configuration
+        </button>
+        <a href="{{ url_for('ats.dashboard') }}" class="btn btn-outline-secondary">Cancel</a>
+    </div>
+</form>
+{% endblock %}

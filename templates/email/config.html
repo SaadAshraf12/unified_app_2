@@ -1,0 +1,134 @@
+{% extends 'base.html' %}
+
+{% block title %}Email Agent Configuration - AI Agents Hub{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1 class="page-title">
+        <i class="bi bi-gear text-secondary me-2"></i>
+        Email Agent Configuration
+    </h1>
+    <p class="page-subtitle">Configure which emails to scan and how tasks should be created.</p>
+</div>
+
+<form method="POST">
+    <div class="row g-4">
+        <!-- ClickUp Settings -->
+        <div class="col-lg-6 animate-in">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title">
+                        <i class="bi bi-check2-square text-success"></i>
+                        ClickUp Settings
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label for="clickup_list_id" class="form-label">ClickUp List ID *</label>
+                        <input type="text" class="form-control" id="clickup_list_id" name="clickup_list_id"
+                            value="{{ config.clickup_list_id or '' }}" placeholder="e.g., 901707728161" required>
+                        <div class="form-text text-muted">
+                            Find this in your ClickUp list URL: clickup.com/1234567/<strong>list_id</strong>
+                        </div>
+                    </div>
+
+                    <div class="form-check form-switch mb-3">
+                        <input class="form-check-input" type="checkbox" id="is_enabled" name="is_enabled" {% if
+                            config.is_enabled %}checked{% endif %}>
+                        <label class="form-check-label" for="is_enabled">
+                            Agent Enabled
+                        </label>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sender Filters -->
+        <div class="col-lg-6 animate-in delay-1">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title">
+                        <i class="bi bi-envelope-check text-primary"></i>
+                        Allowed Senders
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label for="allowed_senders" class="form-label">Email Addresses (one per line)</label>
+                        <textarea class="form-control" id="allowed_senders" name="allowed_senders" rows="8"
+                            placeholder="john@example.com&#10;jane@example.com&#10;helpdesk@company.com">{{ config.allowed_senders | join('\n') if config.allowed_senders else '' }}</textarea>
+                        <div class="form-text text-muted">
+                            Only emails from these senders will be processed. Leave empty to process all emails.
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Assignees -->
+        <div class="col-lg-6 animate-in delay-2">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title">
+                        <i class="bi bi-people text-info"></i>
+                        Team Assignees
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label for="allowed_assignees" class="form-label">Team Member Names (one per line)</label>
+                        <textarea class="form-control" id="allowed_assignees" name="allowed_assignees" rows="8"
+                            placeholder="John Smith&#10;Jane Doe&#10;Bob Wilson">{{ config.allowed_assignees | join('\n') if config.allowed_assignees else '' }}</textarea>
+                        <div class="form-text text-muted">
+                            AI will try to match mentioned names to these team members for task assignment.
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Filters -->
+        <div class="col-lg-6 animate-in delay-3">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title">
+                        <i class="bi bi-funnel text-warning"></i>
+                        Filters
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label for="sensitive_keywords" class="form-label">Sensitive Keywords (one per line)</label>
+                        <textarea class="form-control" id="sensitive_keywords" name="sensitive_keywords" rows="4"
+                            placeholder="salary&#10;confidential&#10;hiring&#10;medical">{{ config.sensitive_keywords | join('\n') if config.sensitive_keywords else '' }}</textarea>
+                        <div class="form-text text-muted">
+                            Emails containing these keywords will be skipped.
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="ignore_subject_prefixes" class="form-label">Ignore Subject Prefixes (one per
+                            line)</label>
+                        <textarea class="form-control" id="ignore_subject_prefixes" name="ignore_subject_prefixes"
+                            rows="4"
+                            placeholder="Automatic reply:&#10;Accepted:&#10;Declined:">{{ config.ignore_subject_prefixes | join('\n') if config.ignore_subject_prefixes else '' }}</textarea>
+                        <div class="form-text text-muted">
+                            Emails with subjects starting with these prefixes will be skipped.
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="mt-4 d-flex gap-2 animate-in delay-4">
+        <button type="submit" class="btn btn-primary">
+            <i class="bi bi-check2 me-1"></i>
+            Save Configuration
+        </button>
+        <a href="{{ url_for('email.dashboard') }}" class="btn btn-outline-secondary">
+            Cancel
+        </a>
+    </div>
+</form>
+{% endblock %}

@@ -1,0 +1,283 @@
+{% extends 'base.html' %}
+
+{% block title %}API Settings - AI Agents Hub{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1 class="page-title">API Settings</h1>
+    <p class="page-subtitle">Configure your API credentials to connect the AI agents to your services.</p>
+</div>
+
+<div class="row g-4">
+    <!-- ClickUp Configuration -->
+    <div class="col-lg-6 animate-in">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title">
+                    <i class="bi bi-check2-square text-success"></i>
+                    ClickUp Integration
+                </h5>
+            </div>
+            <div class="card-body">
+                <form method="POST">
+                    <div class="mb-3">
+                        <label for="clickup_api_key" class="form-label">ClickUp API Key</label>
+                        <div class="input-group">
+                            <input type="password" class="form-control" id="clickup_api_key" name="clickup_api_key"
+                                placeholder="pk_xxxxxxxx_xxxxxxxxxxxxxxxxx"
+                                value="{% if current_user.settings and current_user.settings.clickup_api_key %}••••••••••••••••{% endif %}">
+                            <button class="btn btn-outline-secondary" type="button"
+                                onclick="togglePassword('clickup_api_key')">
+                                <i class="bi bi-eye"></i>
+                            </button>
+                        </div>
+                        <div class="form-text text-muted">
+                            Get your API key from <a href="https://app.clickup.com/settings/apps"
+                                target="_blank">ClickUp Settings → Apps</a>
+                        </div>
+                    </div>
+
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-check2 me-1"></i> Save
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary" onclick="testClickUp()">
+                            <i class="bi bi-plug me-1"></i> Test Connection
+                        </button>
+                    </div>
+                </form>
+
+                <div id="clickup-test-result" class="mt-3" style="display: none;"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- OpenAI Configuration -->
+    <div class="col-lg-6 animate-in delay-1">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title">
+                    <i class="bi bi-stars text-warning"></i>
+                    OpenAI Integration
+                </h5>
+            </div>
+            <div class="card-body">
+                <form method="POST">
+                    <div class="mb-3">
+                        <label for="openai_api_key" class="form-label">OpenAI API Key</label>
+                        <div class="input-group">
+                            <input type="password" class="form-control" id="openai_api_key" name="openai_api_key"
+                                placeholder="sk-proj-xxxxxxxxxxxxxxxxxx"
+                                value="{% if current_user.settings and current_user.settings.openai_api_key %}••••••••••••••••{% endif %}">
+                            <button class="btn btn-outline-secondary" type="button"
+                                onclick="togglePassword('openai_api_key')">
+                                <i class="bi bi-eye"></i>
+                            </button>
+                        </div>
+                        <div class="form-text text-muted">
+                            Get your API key from <a href="https://platform.openai.com/api-keys" target="_blank">OpenAI
+                                Platform</a>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-check2 me-1"></i> Save
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Microsoft Configuration -->
+    <div class="col-lg-12 animate-in delay-2">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title">
+                    <i class="bi bi-microsoft text-info"></i>
+                    Microsoft Account
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <form method="POST">
+                            <div class="mb-3">
+                                <label for="azure_client_id" class="form-label">Azure App Client ID</label>
+                                <input type="text" class="form-control" id="azure_client_id" name="azure_client_id"
+                                    placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+                                    value="{{ current_user.settings.azure_client_id if current_user.settings and current_user.settings.azure_client_id else '' }}">
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="azure_tenant_id" class="form-label">Azure Tenant ID</label>
+                                <input type="text" class="form-control" id="azure_tenant_id" name="azure_tenant_id"
+                                    placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx or common"
+                                    value="{{ current_user.settings.azure_tenant_id if current_user.settings and current_user.settings.azure_tenant_id else '' }}">
+                            </div>
+
+                            <button type="submit" class="btn btn-primary">
+                                <i class="bi bi-check2 me-1"></i> Save Azure Settings
+                            </button>
+                        </form>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="bg-dark rounded p-4 h-100">
+                            <h6 class="mb-3">
+                                <i class="bi bi-info-circle text-info me-1"></i>
+                                Microsoft Authentication Status
+                            </h6>
+                            {% if current_user.settings and current_user.settings.ms_access_token %}
+                            <div class="d-flex align-items-center mb-3">
+                                <span class="config-status active me-2"></span>
+                                <span class="text-success">Connected</span>
+                            </div>
+                            <p class="text-muted small mb-2">
+                                Your Microsoft account is linked. The agents can access your emails and meetings.
+                            </p>
+                            {% if current_user.settings.ms_token_expires_at %}
+                            <p class="text-muted small mb-3">
+                                Token expires: {{ current_user.settings.ms_token_expires_at.strftime('%Y-%m-%d %H:%M')
+                                }}
+                            </p>
+                            {% endif %}
+                            <a href="{{ url_for('auth.ms_login') }}" class="btn btn-outline-info btn-sm">
+                                <i class="bi bi-arrow-repeat me-1"></i>
+                                Re-authenticate
+                            </a>
+                            {% else %}
+                            <div class="d-flex align-items-center mb-3">
+                                <span class="config-status inactive me-2"></span>
+                                <span class="text-muted">Not Connected</span>
+                            </div>
+                            <p class="text-muted small mb-3">
+                                Connect your Microsoft account to enable email and meeting scanning.
+                            </p>
+                            <a href="{{ url_for('auth.ms_login') }}" class="btn btn-outline-info">
+                                <i class="bi bi-microsoft me-1"></i>
+                                Connect Microsoft Account
+                            </a>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Voice Bot Configuration -->
+    <div class="col-lg-12 animate-in delay-3">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title">
+                    <i class="bi bi-mic text-primary"></i>
+                    Voice Bot Configuration
+                </h5>
+            </div>
+            <div class="card-body">
+                <form method="POST">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="recall_ai_token" class="form-label">Recall.ai API Token</label>
+                                <div class="input-group">
+                                    <input type="password" class="form-control" id="recall_ai_token"
+                                        name="recall_ai_token" placeholder="Your Recall.ai token"
+                                        value="{% if current_user.bot_config and current_user.bot_config.recall_ai_token %}••••••••••••••••{% endif %}">
+                                    <button class="btn btn-outline-secondary" type="button"
+                                        onclick="togglePassword('recall_ai_token')">
+                                        <i class="bi bi-eye"></i>
+                                    </button>
+                                </div>
+                                <div class="form-text text-muted">
+                                    Get your token from <a href="https://recall.ai" target="_blank">Recall.ai
+                                        Dashboard</a>
+                                </div>
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="deepgram_api_key" class="form-label">Deepgram API Key</label>
+                                <div class="input-group">
+                                    <input type="password" class="form-control" id="deepgram_api_key"
+                                        name="deepgram_api_key" placeholder="Your Deepgram API key"
+                                        value="{% if current_user.bot_config and current_user.bot_config.deepgram_api_key %}••••••••••••••••{% endif %}">
+                                    <button class="btn btn-outline-secondary" type="button"
+                                        onclick="togglePassword('deepgram_api_key')">
+                                        <i class="bi bi-eye"></i>
+                                    </button>
+                                </div>
+                                <div class="form-text text-muted">
+                                    Get your API key from <a href="https://console.deepgram.com"
+                                        target="_blank">Deepgram Console</a>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="voice_bot_client_url" class="form-label">Voice Bot Client URL</label>
+                                <input type="url" class="form-control" id="voice_bot_client_url"
+                                    name="voice_bot_client_url" placeholder="https://your-app.netlify.app"
+                                    value="{{ current_user.bot_config.voice_bot_client_url if current_user.bot_config and current_user.bot_config.voice_bot_client_url else 'https://animated-torte-eca718.netlify.app' }}">
+                                <div class="form-text text-muted">
+                                    URL of the React voice client (hosted on Netlify)
+                                </div>
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="voice_bot_websocket_url" class="form-label">WebSocket Server URL</label>
+                                <input type="url" class="form-control" id="voice_bot_websocket_url"
+                                    name="voice_bot_websocket_url" placeholder="wss://your-server.com"
+                                    value="{{ current_user.bot_config.voice_bot_websocket_url if current_user.bot_config and current_user.bot_config.voice_bot_websocket_url else '' }}">
+                                <div class="form-text text-muted">
+                                    WebSocket URL for audio streaming (use ngrok or devtunnel for local dev)
+                                </div>
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="voice_bot_port" class="form-label">WebSocket Port</label>
+                                <input type="number" class="form-control" id="voice_bot_port" name="voice_bot_port"
+                                    placeholder="8000"
+                                    value="{{ current_user.bot_config.voice_bot_port if current_user.bot_config and current_user.bot_config.voice_bot_port else '8000' }}">
+                                <div class="form-text text-muted">
+                                    Port for the WebSocket server (default: 8000)
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-check2 me-1"></i> Save Voice Bot Settings
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    function togglePassword(inputId) {
+        const input = document.getElementById(inputId);
+        input.type = input.type === 'password' ? 'text' : 'password';
+    }
+
+    function testClickUp() {
+        const resultDiv = document.getElementById('clickup-test-result');
+        resultDiv.style.display = 'block';
+        resultDiv.innerHTML = '<div class="alert alert-info"><i class="bi bi-hourglass-split me-2"></i>Testing connection...</div>';
+
+        fetch('{{ url_for("auth.test_clickup") }}', { method: 'POST' })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    resultDiv.innerHTML = `<div class="alert alert-success"><i class="bi bi-check-circle me-2"></i>${data.message}</div>`;
+                } else {
+                    resultDiv.innerHTML = `<div class="alert alert-danger"><i class="bi bi-x-circle me-2"></i>${data.message}</div>`;
+                }
+            })
+            .catch(error => {
+                resultDiv.innerHTML = `<div class="alert alert-danger"><i class="bi bi-x-circle me-2"></i>Connection failed</div>`;
+            });
+    }
+</script>
+{% endblock %}

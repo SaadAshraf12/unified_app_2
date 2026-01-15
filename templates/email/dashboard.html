@@ -1,0 +1,401 @@
+{% extends 'base.html' %}
+
+{% block title %}Email Agent - AI Agents Hub{% endblock %}
+
+{% block extra_css %}
+<style>
+    .chart-container {
+        position: relative;
+        height: 200px;
+    }
+
+    .sender-list {
+        max-height: 200px;
+        overflow-y: auto;
+    }
+
+    .sender-item {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        padding: 0.5rem 0;
+        border-bottom: 1px solid var(--border-color);
+    }
+
+    .sender-item:last-child {
+        border-bottom: none;
+    }
+
+    .sender-avatar {
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        background: var(--gradient-primary);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: white;
+    }
+
+    .live-indicator {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-size: 0.8rem;
+        color: var(--accent-success);
+    }
+
+    .live-indicator .dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--accent-success);
+        animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+
+        0%,
+        100% {
+            opacity: 1;
+            transform: scale(1);
+        }
+
+        50% {
+            opacity: 0.5;
+            transform: scale(1.2);
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header d-flex justify-content-between align-items-start">
+    <div>
+        <h1 class="page-title">
+            <i class="bi bi-envelope text-primary me-2"></i>
+            Email Agent
+        </h1>
+        <p class="page-subtitle">Automatically scan emails and create ClickUp tasks from actionable content.</p>
+    </div>
+    <div class="d-flex align-items-center gap-3">
+        {% if config and config.is_enabled %}
+        <span class="live-indicator">
+            <span class="dot"></span>
+            Agent Active
+        </span>
+        {% endif %}
+        {% if is_configured %}
+        <button class="btn btn-primary" onclick="runEmailScan()" id="runBtn">
+            <i class="bi bi-play-fill me-1"></i>
+            Run Scan Now
+        </button>
+        {% else %}
+        <a href="{{ url_for('email.config') }}" class="btn btn-warning">
+            <i class="bi bi-gear me-1"></i>
+            Configure First
+        </a>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Stats -->
+<div class="row g-4 mb-4">
+    <div class="col-md-6 col-lg-3 animate-in">
+        <div class="stat-card">
+            <div class="stat-icon primary">
+                <i class="bi bi-envelope-check"></i>
+            </div>
+            <div class="stat-value">{{ stats.total_scanned }}</div>
+            <div class="stat-label">Emails Scanned</div>
+        </div>
+    </div>
+    <div class="col-md-6 col-lg-3 animate-in delay-1">
+        <div class="stat-card success">
+            <div class="stat-icon success">
+                <i class="bi bi-check2-square"></i>
+            </div>
+            <div class="stat-value">{{ stats.tasks_created }}</div>
+            <div class="stat-label">Tasks Created</div>
+        </div>
+    </div>
+    <div class="col-md-6 col-lg-3 animate-in delay-2">
+        <div class="stat-card">
+            <div class="stat-icon info">
+                <i class="bi bi-people"></i>
+            </div>
+            <div class="stat-value">{{ stats.allowed_senders }}</div>
+            <div class="stat-label">Allowed Senders</div>
+        </div>
+    </div>
+    <div class="col-md-6 col-lg-3 animate-in delay-3">
+        <div class="stat-card warning">
+            <div class="stat-icon warning">
+                <i class="bi bi-person-check"></i>
+            </div>
+            <div class="stat-value">{{ stats.allowed_assignees }}</div>
+            <div class="stat-label">Team Assignees</div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4">
+    <!-- Weekly Activity Chart -->
+    <div class="col-lg-8 animate-in">
+        <div class="card h-100">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-graph-up text-primary"></i>
+                    Weekly Email Activity
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="chart-container">
+                    <canvas id="emailActivityChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Configuration Summary -->
+    <div class="col-lg-4 animate-in delay-1">
+        <div class="card h-100">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-gear text-secondary"></i>
+                    Configuration
+                </h5>
+                <a href="{{ url_for('email.config') }}" class="btn btn-sm btn-outline-secondary">Edit</a>
+            </div>
+            <div class="card-body">
+                <div class="config-item">
+                    <span class="config-label">
+                        <span
+                            class="config-status {{ 'active' if config and config.clickup_list_id else 'inactive' }}"></span>
+                        ClickUp List ID
+                    </span>
+                    <span class="text-muted small">{{ config.clickup_list_id if config and config.clickup_list_id else
+                        'Not set' }}</span>
+                </div>
+                <div class="config-item">
+                    <span class="config-label">Allowed Senders</span>
+                    <span class="badge bg-info">{{ stats.allowed_senders }}</span>
+                </div>
+                <div class="config-item">
+                    <span class="config-label">Team Assignees</span>
+                    <span class="badge bg-info">{{ stats.allowed_assignees }}</span>
+                </div>
+                <div class="config-item">
+                    <span class="config-label">Agent Status</span>
+                    {% if config and config.is_enabled %}
+                    <span class="badge bg-success">Enabled</span>
+                    {% else %}
+                    <span class="badge bg-secondary">Disabled</span>
+                    {% endif %}
+                </div>
+
+                <hr class="my-3" style="border-color: var(--border-color);">
+
+                <!-- Allowed Senders List -->
+                {% if config and config.allowed_senders %}
+                <h6 class="text-muted small text-uppercase mb-2">Active Senders</h6>
+                <div class="sender-list">
+                    {% for sender in config.allowed_senders[:5] %}
+                    <div class="sender-item">
+                        <div class="sender-avatar">{{ sender[0] | upper }}</div>
+                        <span class="text-truncate small">{{ sender }}</span>
+                    </div>
+                    {% endfor %}
+                    {% if config.allowed_senders | length > 5 %}
+                    <div class="text-center text-muted small mt-2">
+                        +{{ config.allowed_senders | length - 5 }} more
+                    </div>
+                    {% endif %}
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4 mt-2">
+    <!-- Activity Log -->
+    <div class="col-lg-5 animate-in">
+        <div class="card h-100">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-terminal text-info"></i>
+                    Activity Log
+                </h5>
+            </div>
+            <div class="card-body" style="max-height: 350px; overflow-y: auto;">
+                <div id="activity-log">
+                    {% if recent_logs %}
+                    {% for log in recent_logs %}
+                    <div class="activity-item">
+                        <div
+                            class="activity-icon {% if log.status == 'success' %}bg-success bg-opacity-15 text-success{% elif log.status == 'error' %}bg-danger bg-opacity-15 text-danger{% else %}bg-warning bg-opacity-15 text-warning{% endif %}">
+                            <i
+                                class="bi {% if log.status == 'success' %}bi-check-lg{% elif log.status == 'error' %}bi-x-lg{% else %}bi-exclamation{% endif %}"></i>
+                        </div>
+                        <div class="activity-content">
+                            <div class="activity-text">{{ log.message }}</div>
+                            <div class="activity-time">{{ log.created_at.strftime('%b %d, %H:%M') }}</div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                    {% else %}
+                    <div class="text-center text-muted py-4">
+                        <i class="bi bi-inbox display-6 mb-2"></i>
+                        <p class="mb-0">No activity yet</p>
+                        <small>Run a scan to see logs here</small>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Recent Emails -->
+    <div class="col-lg-7 animate-in delay-1">
+        <div class="card h-100">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-envelope-open text-primary"></i>
+                    Recently Processed Emails
+                </h5>
+                <a href="{{ url_for('email.history') }}" class="btn btn-sm btn-outline-secondary">View All</a>
+            </div>
+            <div class="card-body p-0">
+                {% if recent_emails %}
+                <div class="table-responsive">
+                    <table class="table mb-0">
+                        <thead>
+                            <tr>
+                                <th>Subject</th>
+                                <th>Sender</th>
+                                <th>Tasks</th>
+                                <th>Date</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for email in recent_emails %}
+                            <tr>
+                                <td class="text-truncate" style="max-width: 250px;">{{ email.subject or 'No Subject' }}
+                                </td>
+                                <td class="text-muted small">
+                                    <span class="sender-avatar me-1"
+                                        style="width: 20px; height: 20px; font-size: 0.6rem; display: inline-flex;">
+                                        {{ email.sender[0] | upper }}
+                                    </span>
+                                    {{ email.sender.split('@')[0] }}
+                                </td>
+                                <td>
+                                    {% if email.tasks_created > 0 %}
+                                    <span class="badge bg-success">{{ email.tasks_created }}</span>
+                                    {% else %}
+                                    <span class="badge bg-secondary">0</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-muted small">{{ email.processed_at.strftime('%b %d') }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center text-muted py-5">
+                    <i class="bi bi-envelope-x display-5 mb-3"></i>
+                    <p class="mb-0">No emails processed yet</p>
+                    <small>Click "Run Scan Now" to start processing emails</small>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script>
+    // Weekly Activity Chart
+    const emailActivityCtx = document.getElementById('emailActivityChart').getContext('2d');
+    const weeklyEmailsData = {{ weekly_emails | default ([0, 0, 0, 0, 0, 0, 0]) | tojson }};
+    const weeklyEmailTasksData = {{ weekly_tasks | default ([0, 0, 0, 0, 0, 0, 0]) | tojson }};
+
+    new Chart(emailActivityCtx, {
+        type: 'bar',
+        data: {
+            labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+            datasets: [
+                {
+                    label: 'Emails Scanned',
+                    data: weeklyEmailsData,
+                    backgroundColor: 'rgba(99, 102, 241, 0.8)',
+                    borderColor: '#6366f1',
+                    borderWidth: 1,
+                    borderRadius: 4
+                },
+                {
+                    label: 'Tasks Created',
+                    data: weeklyEmailTasksData,
+                    backgroundColor: 'rgba(16, 185, 129, 0.8)',
+                    borderColor: '#10b981',
+                    borderWidth: 1,
+                    borderRadius: 4
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'top',
+                    labels: { color: '#a0a0b0', usePointStyle: true }
+                }
+            },
+            scales: {
+                x: {
+                    grid: { color: 'rgba(255,255,255,0.05)' },
+                    ticks: { color: '#6c6c7c' }
+                },
+                y: {
+                    beginAtZero: true,
+                    grid: { color: 'rgba(255,255,255,0.05)' },
+                    ticks: { color: '#6c6c7c' }
+                }
+            }
+        }
+    });
+
+    function runEmailScan() {
+        const btn = document.getElementById('runBtn');
+        const originalHtml = btn.innerHTML;
+        btn.innerHTML = '<i class="bi bi-hourglass-split me-1"></i> Scanning...';
+        btn.disabled = true;
+
+        fetch('{{ url_for("email.run_ajax") }}', { method: 'POST' })
+            .then(response => response.json())
+            .then(data => {
+                btn.innerHTML = originalHtml;
+                btn.disabled = false;
+
+                if (data.success) {
+                    showToast('Scan complete! Checked ' + data.emails_checked + ' emails, created ' + data.tasks_created + ' tasks.', 'success');
+                    setTimeout(function () { location.reload(); }, 1500);
+                } else {
+                    showToast('Scan failed: ' + data.error, 'danger');
+                }
+            })
+            .catch(function (error) {
+                btn.innerHTML = originalHtml;
+                btn.disabled = false;
+                showToast('An error occurred during the scan.', 'danger');
+            });
+    }
+</script>
+{% endblock %}

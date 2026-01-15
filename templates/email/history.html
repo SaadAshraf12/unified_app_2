@@ -1,0 +1,88 @@
+{% extends 'base.html' %}
+
+{% block title %}Email History - AI Agents Hub{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1 class="page-title">
+        <i class="bi bi-clock-history text-secondary me-2"></i>
+        Email Processing History
+    </h1>
+    <p class="page-subtitle">View all emails that have been processed by the Email Agent.</p>
+</div>
+
+<div class="card animate-in">
+    <div class="card-body p-0">
+        {% if emails.items %}
+        <div class="table-responsive">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Subject</th>
+                        <th>Sender</th>
+                        <th>Tasks Created</th>
+                        <th>Processed At</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for email in emails.items %}
+                    <tr>
+                        <td class="text-truncate" style="max-width: 400px;">
+                            {{ email.subject or 'No Subject' }}
+                        </td>
+                        <td class="text-muted">{{ email.sender }}</td>
+                        <td>
+                            {% if email.tasks_created > 0 %}
+                            <span class="badge bg-success">{{ email.tasks_created }} task{{ 's' if email.tasks_created >
+                                1 else '' }}</span>
+                            {% else %}
+                            <span class="badge bg-secondary">No tasks</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-muted small">{{ email.processed_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Pagination -->
+        {% if emails.pages > 1 %}
+        <div class="d-flex justify-content-center py-3">
+            <nav>
+                <ul class="pagination mb-0">
+                    {% if emails.has_prev %}
+                    <li class="page-item">
+                        <a class="page-link" href="{{ url_for('email.history', page=emails.prev_num) }}">Previous</a>
+                    </li>
+                    {% endif %}
+
+                    {% for page in emails.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+                    {% if page %}
+                    <li class="page-item {{ 'active' if page == emails.page else '' }}">
+                        <a class="page-link" href="{{ url_for('email.history', page=page) }}">{{ page }}</a>
+                    </li>
+                    {% else %}
+                    <li class="page-item disabled"><span class="page-link">...</span></li>
+                    {% endif %}
+                    {% endfor %}
+
+                    {% if emails.has_next %}
+                    <li class="page-item">
+                        <a class="page-link" href="{{ url_for('email.history', page=emails.next_num) }}">Next</a>
+                    </li>
+                    {% endif %}
+                </ul>
+            </nav>
+        </div>
+        {% endif %}
+        {% else %}
+        <div class="text-center text-muted py-5">
+            <i class="bi bi-inbox display-5 mb-3"></i>
+            <p class="mb-0">No emails have been processed yet</p>
+            <a href="{{ url_for('email.dashboard') }}" class="btn btn-primary mt-3">Go to Dashboard</a>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

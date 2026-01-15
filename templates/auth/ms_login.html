@@ -1,0 +1,88 @@
+{% extends 'base.html' %}
+
+{% block title %}Connect Microsoft Account - AI Agents Hub{% endblock %}
+
+{% block content %}
+<div class="min-vh-100 d-flex align-items-center justify-content-center" style="margin-top: -100px;">
+    <div class="card" style="width: 100%; max-width: 500px;">
+        <div class="card-body p-4 text-center">
+            <div class="d-inline-flex align-items-center justify-content-center mb-3"
+                style="width: 64px; height: 64px; background: linear-gradient(135deg, #00a4ef 0%, #0078d4 100%); border-radius: 16px;">
+                <i class="bi bi-microsoft text-white" style="font-size: 2rem;"></i>
+            </div>
+            <h2 class="fw-bold mb-2">Connect Microsoft Account</h2>
+            <p class="text-secondary mb-4">Follow the steps below to link your Microsoft account.</p>
+
+            <div class="alert alert-info text-start">
+                <h6 class="fw-bold mb-2">
+                    <i class="bi bi-1-circle me-1"></i>
+                    Open this URL in your browser:
+                </h6>
+                <div class="d-flex align-items-center gap-2 mb-3">
+                    <input type="text" class="form-control" value="{{ verification_uri }}" readonly
+                        id="verification-url">
+                    <button class="btn btn-outline-info btn-sm" onclick="copyUrl()">
+                        <i class="bi bi-clipboard"></i>
+                    </button>
+                </div>
+
+                <h6 class="fw-bold mb-2">
+                    <i class="bi bi-2-circle me-1"></i>
+                    Enter this code:
+                </h6>
+                <div class="d-flex align-items-center justify-content-center gap-2 mb-3">
+                    <code
+                        style="font-size: 1.5rem; background: var(--bg-secondary); padding: 0.5rem 1rem; border-radius: 8px;">
+                        {{ user_code }}
+                    </code>
+                    <button class="btn btn-outline-info btn-sm" onclick="copyCode()">
+                        <i class="bi bi-clipboard"></i>
+                    </button>
+                </div>
+
+                <h6 class="fw-bold mb-2">
+                    <i class="bi bi-3-circle me-1"></i>
+                    Sign in with your Microsoft account
+                </h6>
+                <p class="mb-0 small">After signing in successfully on the Microsoft page, click the button below.</p>
+            </div>
+
+            <form method="POST" action="{{ url_for('auth.ms_login_complete') }}">
+                <button type="submit" class="btn btn-primary w-100 mb-3">
+                    <i class="bi bi-check2-circle me-2"></i>
+                    I've Completed Sign-In
+                </button>
+            </form>
+
+            <a href="{{ url_for('auth.settings') }}" class="btn btn-outline-secondary w-100">
+                Cancel
+            </a>
+
+            <div class="mt-4 text-muted small">
+                <i class="bi bi-shield-check me-1"></i>
+                Your credentials are securely stored and encrypted.
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    function copyUrl() {
+        const url = document.getElementById('verification-url').value;
+        navigator.clipboard.writeText(url);
+        showToast('URL copied to clipboard!', 'success');
+    }
+
+    function copyCode() {
+        navigator.clipboard.writeText('{{ user_code }}');
+        showToast('Code copied to clipboard!', 'success');
+    }
+
+    // Open the URL in a new tab
+    window.onload = function () {
+        window.open('{{ verification_uri }}', '_blank');
+    }
+</script>
+{% endblock %}

@@ -1,0 +1,141 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ candidate.full_name or 'Candidate' }} - ATS Agent{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1 class="page-title">{{ candidate.full_name or 'Unknown Candidate' }}</h1>
+    <p class="page-subtitle">
+        {% if candidate.email %}{{ candidate.email }} • {% endif %}
+        Score: <span
+            class="badge {% if candidate.final_weighted_score >= 80 %}bg-success{% elif candidate.final_weighted_score >= 60 %}bg-warning{% else %}bg-secondary{% endif %}">{{
+            candidate.final_weighted_score }}</span>
+    </p>
+</div>
+
+<div class="row g-4">
+    <!-- Score Breakdown -->
+    <div class="col-lg-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Score Breakdown</h5>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <div class="d-flex justify-content-between mb-1">
+                        <span>Skills</span>
+                        <strong>{{ candidate.skills_score or 0 }}</strong>
+                    </div>
+                    <div class="progress" style="height: 10px;">
+                        <div class="progress-bar bg-primary" style="width: {{ candidate.skills_score or 0 }}%"></div>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <div class="d-flex justify-content-between mb-1">
+                        <span>Title Match</span>
+                        <strong>{{ candidate.title_score or 0 }}</strong>
+                    </div>
+                    <div class="progress" style="height: 10px;">
+                        <div class="progress-bar bg-success" style="width: {{ candidate.title_score or 0 }}%"></div>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <div class="d-flex justify-content-between mb-1">
+                        <span>Experience</span>
+                        <strong>{{ candidate.experience_score or 0 }}</strong>
+                    </div>
+                    <div class="progress" style="height: 10px;">
+                        <div class="progress-bar bg-warning" style="width: {{ candidate.experience_score or 0 }}%">
+                        </div>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <div class="d-flex justify-content-between mb-1">
+                        <span>Education</span>
+                        <strong>{{ candidate.education_score or 0 }}</strong>
+                    </div>
+                    <div class="progress" style="height: 10px;">
+                        <div class="progress-bar bg-info" style="width: {{ candidate.education_score or 0 }}%"></div>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <div class="d-flex justify-content-between mb-1">
+                        <span>Keywords</span>
+                        <strong>{{ candidate.keywords_score or 0 }}</strong>
+                    </div>
+                    <div class="progress" style="height: 10px;">
+                        <div class="progress-bar bg-secondary" style="width: {{ candidate.keywords_score or 0 }}%">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card mt-3">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Details</h5>
+            </div>
+            <div class="card-body">
+                <p><strong>Experience:</strong> {{ candidate.years_of_experience or 'N/A' }} years</p>
+                <p><strong>Location:</strong> {{ candidate.location or 'N/A' }}</p>
+                <p><strong>Current Title:</strong> {{ candidate.current_job_title or 'N/A' }}</p>
+                <p><strong>Phone:</strong> {{ candidate.phone or 'N/A' }}</p>
+                {% if candidate.linkedin_url %}
+                <p><strong>LinkedIn:</strong> <a href="{{ candidate.linkedin_url }}" target="_blank">Profile</a></p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Analysis -->
+    <div class="col-lg-8">
+        <div class="card mb-3">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Overall Assessment</h5>
+            </div>
+            <div class="card-body">
+                <p>{{ candidate.overall_assessment or 'No assessment available' }}</p>
+            </div>
+        </div>
+
+        {% if candidate.red_flags %}
+        <div class="card mb-3">
+            <div class="card-header bg-danger text-white">
+                <h5 class="card-title mb-0">Red Flags</h5>
+            </div>
+            <div class="card-body">
+                <ul>
+                    {% for flag in candidate.red_flags %}
+                    <li>{{ flag }}</li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+        {% endif %}
+
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">CV Document</h5>
+                {% if candidate.cv_file_path %}
+                <div>
+                    <a href="{{ url_for('ats.view_cv', candidate_id=candidate.id) }}" target="_blank"
+                        class="btn btn-sm btn-primary">
+                        <i class="bi bi-eye"></i> View PDF
+                    </a>
+                    <a href="{{ url_for('ats.download_cv', candidate_id=candidate.id) }}"
+                        class="btn btn-sm btn-outline-primary">
+                        <i class="bi bi-download"></i> Download
+                    </a>
+                </div>
+                {% else %}
+                <span class="text-muted">File not available</span>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="mt-3">
+    <a href="{{ url_for('ats.results') }}" class="btn btn-outline-secondary">Back to Results</a>
+</div>
+{% endblock %}

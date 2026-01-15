@@ -1,0 +1,290 @@
+{% extends "base.html" %}
+
+{% block title %}Voice Bot - AI Agent Hub{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="row mb-4">
+        <div class="col-12">
+            <h2><i class="fas fa-microphone"></i> Voice Bot Manager</h2>
+            <p class="text-muted">Create AI voice bots that join your Teams meetings</p>
+        </div>
+    </div>
+
+    <!-- Configuration Status -->
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <div class="card bg-dark">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-cog"></i> Configuration Status</h5>
+                </div>
+                <div class="card-body">
+                    <table class="table table-dark table-sm">
+                        <tr>
+                            <td>Recall.ai Token</td>
+                            <td>
+                                {% if config.recall_token %}
+                                <span class="badge bg-success"><i class="fas fa-check"></i> Configured</span>
+                                {% else %}
+                                <span class="badge bg-danger"><i class="fas fa-times"></i> Not Set</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>Deepgram API Key</td>
+                            <td>
+                                {% if config.deepgram_key %}
+                                <span class="badge bg-success"><i class="fas fa-check"></i> Configured</span>
+                                {% else %}
+                                <span class="badge bg-danger"><i class="fas fa-times"></i> Not Set</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>Client URL</td>
+                            <td><code>{{ config.client_url or 'Not set' }}</code></td>
+                        </tr>
+                        <tr>
+                            <td>WebSocket URL</td>
+                            <td><code>{{ config.websocket_url or 'Not set' }}</code></td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Create Bot Form -->
+        <div class="col-md-6">
+            <div class="card bg-dark">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-plus"></i> Create Voice Bot</h5>
+                </div>
+                <div class="card-body">
+                    <form method="POST" action="{{ url_for('voice_bot.create_bot') }}">
+                        <div class="mb-3">
+                            <label class="form-label">Meeting URL</label>
+                            <input type="url" name="meeting_url" class="form-control bg-dark text-white"
+                                placeholder="https://teams.microsoft.com/meet/..." required>
+                            <small class="text-muted">Teams, Zoom, or Google Meet URL</small>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Bot Name</label>
+                            <input type="text" name="bot_name" class="form-control bg-dark text-white" value="Alex"
+                                placeholder="Alex">
+                            <small class="text-muted">Name displayed in the meeting</small>
+                        </div>
+                        <button type="submit" class="btn btn-primary" {% if not config.recall_token %}disabled{% endif
+                            %}>
+                            <i class="fas fa-robot"></i> Create Bot
+                        </button>
+                        {% if not config.recall_token %}
+                        <small class="text-danger d-block mt-2">
+                            Please configure RECALL_AI_TOKEN in environment variables
+                        </small>
+                        {% endif %}
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Server Control -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card bg-dark border-secondary">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0"><i class="fas fa-server"></i> Voice Server Control</h5>
+                    <span id="server-status-badge" class="badge bg-secondary">Checking...</span>
+                </div>
+                <div class="card-body">
+                    <div class="row align-items-center">
+                        <div class="col-md-8">
+                            <p class="mb-0 text-white">
+                                <strong>Internal WebSocket Server</strong> (Port: {{ config.port }})
+                            </p>
+                            <p class="text-muted small mb-0">
+                                Required for real-time audio streaming. It will auto-start when upcoming meetings are
+                                detected.
+                            </p>
+                        </div>
+                        <div class="col-md-4 text-end">
+                            <button id="btn-start-server" class="btn btn-success me-2" onclick="controlServer('start')">
+                                <i class="fas fa-play"></i> Start
+                            </button>
+                            <button id="btn-stop-server" class="btn btn-danger" onclick="controlServer('stop')">
+                                <i class="fas fa-stop"></i> Stop
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Active Bots -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card bg-dark">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0"><i class="fas fa-list"></i> Recent Bots</h5>
+                    <button class="btn btn-sm btn-outline-light" onclick="location.reload()">
+                        <i class="fas fa-sync"></i> Refresh
+                    </button>
+                </div>
+                <div class="card-body">
+                    {% if bots %}
+                    <div class="table-responsive">
+                        <table class="table table-dark table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Bot ID</th>
+                                    <th>Status</th>
+                                    <th>Meeting</th>
+                                    <th>Created</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for bot in bots %}
+                                <tr>
+                                    <td><code>{{ bot.id[:8] }}...</code></td>
+                                    <td>
+                                        {% set status = bot.status_changes[-1].code if bot.status_changes else 'unknown'
+                                        %}
+                                        {% if status == 'in_call_not_recording' or status == 'in_call_recording' %}
+                                        <span class="badge bg-success">In Meeting</span>
+                                        {% elif status == 'joining_call' %}
+                                        <span class="badge bg-warning">Joining</span>
+                                        {% elif status == 'done' %}
+                                        <span class="badge bg-secondary">Completed</span>
+                                        {% else %}
+                                        <span class="badge bg-info">{{ status }}</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if bot.meeting_url is mapping %}
+                                        <span class="badge bg-secondary">{{ bot.meeting_url.get('platform', 'Unknown') |
+                                            replace('_', ' ') | title }}</span>
+                                        {% else %}
+                                        <a href="{{ bot.meeting_url }}" target="_blank"
+                                            class="text-info text-decoration-none">
+                                            <small>{{ (bot.meeting_url|string)[:40] }}...</small>
+                                        </a>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <small>{{ bot.created_at[:16] if bot.created_at else 'N/A' }}</small>
+                                    </td>
+                                    <td>
+                                        <form method="POST"
+                                            action="{{ url_for('voice_bot.delete_bot', bot_id=bot.id) }}"
+                                            style="display: inline;">
+                                            <button type="submit" class="btn btn-sm btn-outline-danger"
+                                                onclick="return confirm('Stop this bot?')">
+                                                <i class="fas fa-stop"></i> Stop
+                                            </button>
+                                        </form>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="text-center text-muted py-4">
+                        <i class="fas fa-robot fa-3x mb-3"></i>
+                        <p>No bots found. Create one to get started!</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Instructions -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card bg-dark border-info">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0"><i class="fas fa-info-circle"></i> How It Works</h5>
+                </div>
+                <div class="card-body">
+                    <ol>
+                        <li><strong>Create a Bot:</strong> Enter your meeting URL and click "Create Bot"</li>
+                        <li><strong>Bot Joins:</strong> The bot will join your Teams/Zoom/Meet meeting</li>
+                        <li><strong>Activate with Wake Word:</strong> Say <strong>"Hey Alex"</strong> to start talking
+                        </li>
+                        <li><strong>Natural Conversation:</strong> The bot uses AI to respond naturally</li>
+                        <li><strong>Dismiss:</strong> Say "Thanks Alex" or "Goodbye" when done</li>
+                </div>
+            </div>
+
+            <script>
+                document.addEventListener('DOMContentLoaded', function () {
+                    updateServerStatus();
+                    // Poll schedule every 60 seconds
+                    setInterval(checkSchedule, 60000);
+                    // Poll server status every 10 seconds
+                    setInterval(updateServerStatus, 10000);
+                });
+
+                function updateServerStatus() {
+                    fetch('/voice-bot/server/status')
+                        .then(r => r.json())
+                        .then(data => {
+                            const badge = document.getElementById('server-status-badge');
+                            const btnStart = document.getElementById('btn-start-server');
+                            const btnStop = document.getElementById('btn-stop-server');
+
+                            if (badge) {
+                                if (data.running) {
+                                    badge.className = 'badge bg-success';
+                                    badge.textContent = 'Running';
+                                    btnStart.disabled = true;
+                                    btnStop.disabled = false;
+                                } else {
+                                    badge.className = 'badge bg-danger';
+                                    badge.textContent = 'Stopped';
+                                    btnStart.disabled = false;
+                                    btnStop.disabled = true;
+                                }
+                            }
+                        })
+                        .catch(e => console.error("Status check failed", e));
+                }
+
+                function controlServer(action) {
+                    const btnVec = action === 'start' ? document.getElementById('btn-start-server') : document.getElementById('btn-stop-server');
+                    const origText = btnVec.innerHTML;
+                    btnVec.disabled = true;
+                    btnVec.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
+
+                    fetch(`/voice-bot/server/${action}`, { method: 'POST' })
+                        .then(r => r.json())
+                        .then(data => {
+                            if (data.success) {
+                                updateServerStatus();
+                            } else {
+                                alert('Failed: ' + (data.error || 'Unknown error'));
+                            }
+                        })
+                        .finally(() => {
+                            btnVec.innerHTML = origText;
+                            updateServerStatus(); // Re-enable buttons based on status
+                        });
+                }
+
+                function checkSchedule() {
+                    console.log("Checking schedule...");
+                    fetch('/voice-bot/check-schedule', { method: 'POST' })
+                        .then(r => r.json())
+                        .then(data => {
+                            console.log("Schedule check result:", data);
+                            if (data.joined > 0) {
+                                // If a bot joined, refresh page to show it in list
+                                location.reload();
+                            }
+                        });
+                }
+            </script>
+            {% endblock %}

@@ -1,0 +1,95 @@
+{% extends 'base.html' %}
+
+{% block title %}Meeting History - AI Agents Hub{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1 class="page-title">
+        <i class="bi bi-clock-history text-secondary me-2"></i>
+        Meeting Processing History
+    </h1>
+    <p class="page-subtitle">View all meetings that have been processed by the Meeting Agent.</p>
+</div>
+
+<div class="card animate-in">
+    <div class="card-body p-0">
+        {% if meetings.items %}
+        <div class="table-responsive">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Meeting Subject</th>
+                        <th>Tasks Created</th>
+                        <th>Standup Summary</th>
+                        <th>Processed At</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for meeting in meetings.items %}
+                    <tr>
+                        <td class="text-truncate" style="max-width: 400px;">
+                            {{ meeting.meeting_subject or 'Untitled Meeting' }}
+                        </td>
+                        <td>
+                            {% if meeting.tasks_created > 0 %}
+                            <span class="badge bg-success">{{ meeting.tasks_created }} task{{ 's' if
+                                meeting.tasks_created > 1 else '' }}</span>
+                            {% else %}
+                            <span class="badge bg-secondary">No tasks</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if meeting.standup_summary_created %}
+                            <span class="badge bg-info">Created</span>
+                            {% else %}
+                            <span class="badge bg-secondary">N/A</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-muted small">{{ meeting.processed_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Pagination -->
+        {% if meetings.pages > 1 %}
+        <div class="d-flex justify-content-center py-3">
+            <nav>
+                <ul class="pagination mb-0">
+                    {% if meetings.has_prev %}
+                    <li class="page-item">
+                        <a class="page-link"
+                            href="{{ url_for('meeting.history', page=meetings.prev_num) }}">Previous</a>
+                    </li>
+                    {% endif %}
+
+                    {% for page in meetings.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+                    {% if page %}
+                    <li class="page-item {{ 'active' if page == meetings.page else '' }}">
+                        <a class="page-link" href="{{ url_for('meeting.history', page=page) }}">{{ page }}</a>
+                    </li>
+                    {% else %}
+                    <li class="page-item disabled"><span class="page-link">...</span></li>
+                    {% endif %}
+                    {% endfor %}
+
+                    {% if meetings.has_next %}
+                    <li class="page-item">
+                        <a class="page-link" href="{{ url_for('meeting.history', page=meetings.next_num) }}">Next</a>
+                    </li>
+                    {% endif %}
+                </ul>
+            </nav>
+        </div>
+        {% endif %}
+        {% else %}
+        <div class="text-center text-muted py-5">
+            <i class="bi bi-inbox display-5 mb-3"></i>
+            <p class="mb-0">No meetings have been processed yet</p>
+            <a href="{{ url_for('meeting.dashboard') }}" class="btn btn-primary mt-3">Go to Dashboard</a>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

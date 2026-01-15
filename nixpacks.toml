@@ -1,0 +1,10 @@
+# Nixpacks configuration for Railway
+[phases.build]
+# Don't require secrets during build
+dependsOn = []
+
+[phases.install]
+dependsOn = []
+
+[start]
+cmd = "gunicorn app:app --bind 0.0.0.0:$PORT"

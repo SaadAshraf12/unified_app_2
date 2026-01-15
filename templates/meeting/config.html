@@ -1,0 +1,202 @@
+{% extends 'base.html' %}
+
+{% block title %}Meeting Agent Configuration - AI Agents Hub{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1 class="page-title">
+        <i class="bi bi-gear text-secondary me-2"></i>
+        Meeting Agent Configuration
+    </h1>
+    <p class="page-subtitle">Configure how meetings are processed and where tasks are created.</p>
+</div>
+
+<form method="POST">
+    <div class="row g-4">
+        <!-- ClickUp Settings -->
+        <div class="col-lg-6 animate-in">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title">
+                        <i class="bi bi-check2-square text-success"></i>
+                        ClickUp Task Settings
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label for="clickup_list_id" class="form-label">ClickUp List ID *</label>
+                        <input type="text" class="form-control" id="clickup_list_id" name="clickup_list_id"
+                            value="{{ config.clickup_list_id or '' }}" placeholder="e.g., 901707728161" required>
+                        <div class="form-text text-muted">
+                            Tasks extracted from meetings will be created in this list.
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="helpdesk_email" class="form-label">Helpdesk Email</label>
+                        <input type="email" class="form-control" id="helpdesk_email" name="helpdesk_email"
+                            value="{{ config.helpdesk_email or '' }}" placeholder="helpdesk@company.com">
+                        <div class="form-text text-muted">
+                            Alert email for unassigned tasks or missing users.
+                        </div>
+                    </div>
+
+                    <div class="form-check form-switch mb-3">
+                        <input class="form-check-input" type="checkbox" id="is_enabled" name="is_enabled" {% if
+                            config.is_enabled %}checked{% endif %}>
+                        <label class="form-check-label" for="is_enabled">
+                            Agent Enabled
+                        </label>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Standup Summary Settings -->
+        <div class="col-lg-6 animate-in delay-1">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title">
+                        <i class="bi bi-file-text text-info"></i>
+                        Standup Summary Settings
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label for="target_space_id" class="form-label">ClickUp Space ID</label>
+                        <input type="text" class="form-control" id="target_space_id" name="target_space_id"
+                            value="{{ config.target_space_id or '' }}" placeholder="e.g., 90173004341">
+                        <div class="form-text text-muted">
+                            Space containing the standup summary document.
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="target_doc_name" class="form-label">Summary Document Name</label>
+                        <input type="text" class="form-control" id="target_doc_name" name="target_doc_name"
+                            value="{{ config.target_doc_name or 'Daily Standup Summary By AI' }}"
+                            placeholder="Daily Standup Summary By AI">
+                        <div class="form-text text-muted">
+                            Name of the ClickUp Doc where standup summaries are appended.
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Scan Settings -->
+        <div class="col-lg-6 animate-in delay-2">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title">
+                        <i class="bi bi-calendar-range text-warning"></i>
+                        Scan Settings
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label for="scan_days_back" class="form-label">Scan Days Back</label>
+                        <select class="form-select" id="scan_days_back" name="scan_days_back">
+                            {% for i in range(1, 8) %}
+                            <option value="{{ i }}" {% if config.scan_days_back==i %}selected{% endif %}>
+                                {{ i }} day{{ 's' if i > 1 else '' }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                        <div class="form-text text-muted">
+                            How far back to scan for meetings with transcripts.
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="standup_meeting_keywords" class="form-label">Standup Meeting Keywords (one per
+                            line)</label>
+                        <textarea class="form-control" id="standup_meeting_keywords" name="standup_meeting_keywords"
+                            rows="3"
+                            placeholder="Daily Standup&#10;Stand-up&#10;Standup">{{ config.standup_meeting_keywords | join('\n') if config.standup_meeting_keywords else 'Daily Standup\nStand-up\nStandup' }}</textarea>
+                        <div class="form-text text-muted">
+                            Meetings with names containing these keywords will generate standup summaries.
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Meeting Filters -->
+        <div class="col-lg-6 animate-in delay-3">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title">
+                        <i class="bi bi-funnel text-primary"></i>
+                        Meeting Filters
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label for="meeting_name_filters" class="form-label">Only Process These Meetings (one per
+                            line)</label>
+                        <textarea class="form-control" id="meeting_name_filters" name="meeting_name_filters" rows="3"
+                            placeholder="Leave empty to process all meetings">{{ config.meeting_name_filters | join('\n') if config.meeting_name_filters else '' }}</textarea>
+                        <div class="form-text text-muted">
+                            Only process meetings with names containing these keywords. Leave empty for all.
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Excluded Meetings - NEW FEATURE -->
+        <div class="col-lg-12 animate-in delay-4">
+            <div class="card border-danger">
+                <div class="card-header" style="background: rgba(239, 68, 68, 0.1);">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-x-circle text-danger"></i>
+                        Excluded Meetings
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-8">
+                            <label for="excluded_meeting_names" class="form-label">
+                                <strong>Do NOT Process These Meetings</strong> (one meeting name per line)
+                            </label>
+                            <textarea class="form-control" id="excluded_meeting_names" name="excluded_meeting_names"
+                                rows="5"
+                                placeholder="1:1 with Manager&#10;HR Meeting&#10;Personal Call&#10;Confidential Review">{{ config.excluded_meeting_names | join('\n') if config.excluded_meeting_names else '' }}</textarea>
+                            <div class="form-text text-muted">
+                                Meetings with names <strong>containing</strong> any of these keywords will be
+                                <strong>skipped entirely</strong>.
+                                Use this to exclude personal, confidential, or irrelevant meetings from processing.
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="alert alert-warning h-100 mb-0 d-flex flex-column justify-content-center">
+                                <h6 class="alert-heading">
+                                    <i class="bi bi-lightbulb me-1"></i>
+                                    Tips
+                                </h6>
+                                <ul class="mb-0 small">
+                                    <li>Use partial names to match multiple meetings</li>
+                                    <li>e.g., "1:1" will exclude all 1:1 meetings</li>
+                                    <li>Matching is case-insensitive</li>
+                                    <li>These meetings won't appear in logs</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="mt-4 d-flex gap-2 animate-in delay-4">
+        <button type="submit" class="btn btn-primary">
+            <i class="bi bi-check2 me-1"></i>
+            Save Configuration
+        </button>
+        <a href="{{ url_for('meeting.dashboard') }}" class="btn btn-outline-secondary">
+            Cancel
+        </a>
+    </div>
+</form>
+{% endblock %}

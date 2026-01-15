@@ -1,0 +1,228 @@
+{% extends 'base.html' %}
+
+{% block title %}ATS Scoring Agent - Dashboard{% endblock %}
+
+{% block content %}
+<div class="page-header d-flex justify-content-between align-items-center">
+    <div>
+        <h1 class="page-title">
+            <i class="bi bi-file-earmark-person text-warning me-2"></i>
+            ATS Scoring Agent
+        </h1>
+        <p class="page-subtitle">AI-powered resume screening and candidate ranking</p>
+    </div>
+    <div class="d-flex gap-2">
+        <button id="runBtn" class="btn btn-primary" onclick="runATSScan()">
+            <i class="bi bi-play-fill me-1"></i> Run Scan Now
+        </button>
+        <a href="{{ url_for('ats.config') }}" class="btn btn-outline-secondary">
+            <i class="bi bi-gear me-1"></i> Configure
+        </a>
+    </div>
+</div>
+
+<!-- Stats Cards -->
+<div class="row g-4 mb-4">
+    <div class="col-md-3 animate-in">
+        <div class="metric-card">
+            <div class="metric-value">{{ total_cvs }}</div>
+            <div class="metric-label">Total CVs</div>
+        </div>
+    </div>
+    <div class="col-md-3 animate-in delay-1">
+        <div class="metric-card">
+            <div class="metric-value">{{ scored_cvs }}</div>
+            <div class="metric-label">Scored</div>
+        </div>
+    </div>
+    <div class="col-md-3 animate-in delay-2">
+        <div class="metric-card">
+            <div class="metric-value">{{ filtered_cvs }}</div>
+            <div class="metric-label">Filtered Out</div>
+        </div>
+    </div>
+    <div class="col-md-3 animate-in delay-3">
+        <div class="metric-card">
+            <div class="metric-value">{{ avg_score }}</div>
+            <div class="metric-label">Avg Score</div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4">
+    <!-- Top Candidates -->
+    <div class="col-lg-8 animate-in">
+        <div class="card h-100">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-trophy text-warning"></i>
+                    Top Candidates
+                </h5>
+                <a href="{{ url_for('ats.results') }}" class="btn btn-sm btn-outline-secondary">View All</a>
+            </div>
+            <div class="card-body p-0">
+                {% if top_candidates %}
+                <div class="table-responsive">
+                    <table class="table mb-0">
+                        <thead>
+                            <tr>
+                                <th>Rank</th>
+                                <th>Name</th>
+                                <th>Score</th>
+                                <th>Experience</th>
+                                <th>Location</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for candidate in top_candidates %}
+                            <tr>
+                                <td><span class="badge bg-warning">{{ loop.index }}</span></td>
+                                <td>
+                                    <strong>{{ candidate.full_name or 'Unknown' }}</strong>
+                                    {% if candidate.email %}
+                                    <br><small class="text-muted">{{ candidate.email }}</small>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <span
+                                        class="badge {% if candidate.final_weighted_score >= 80 %}bg-success{% elif candidate.final_weighted_score >= 60 %}bg-warning{% else %}bg-secondary{% endif %}">
+                                        {{ candidate.final_weighted_score }}
+                                    </span>
+                                </td>
+                                <td>{{ candidate.years_of_experience or 'N/A' }} years</td>
+                                <td>{{ candidate.location or 'N/A' }}</td>
+                                <td>
+                                    <a href="{{ url_for('ats.candidate_detail', candidate_id=candidate.id) }}"
+                                        class="btn btn-sm btn-outline-primary">
+                                        <i class="bi bi-eye"></i>
+                                    </a>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center text-muted py-5">
+                    <i class="bi bi-inbox display-5 mb-3"></i>
+                    <p class="mb-0">No candidates scored yet</p>
+                    <small>Click "Run Scan Now" to start processing CVs</small>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Recent Scans -->
+    <div class="col-lg-4 animate-in delay-1">
+        <div class="card h-100">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-clock-history text-info"></i>
+                    Recent Scans
+                </h5>
+            </div>
+            <div class="card-body p-0" style="max-height: 400px; overflow-y: auto;">
+                {% if recent_scans %}
+                {% for scan in recent_scans %}
+                <div class="d-flex align-items-start gap-2 p-3 border-bottom">
+                    <i
+                        class="bi {% if scan.status == 'completed' %}bi-check-circle text-success{% elif scan.status == 'failed' %}bi-x-circle text-danger{% else %}bi-hourglass-split text-warning{% endif %}"></i>
+                    <div class="flex-grow-1">
+                        <div class="small">
+                            <strong>{{ scan.cvs_scored }}</strong> scored,
+                            <strong>{{ scan.cvs_filtered_out }}</strong> filtered
+                        </div>
+                        <div class="text-muted" style="font-size: 0.7rem;">
+                            {{ scan.scan_started_at.strftime('%b %d, %H:%M') }}
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+                {% else %}
+                <div class="text-center text-muted py-4">
+                    <p class="mb-0 small">No scans yet</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Configuration Status -->
+<div class="row g-4 mt-2">
+    <div class="col-md-12 animate-in">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-gear text-secondary"></i>
+                    Current Configuration
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <p><strong>Job Title:</strong> {{ config.job_title or 'Not set' }}</p>
+                        <p><strong>Top N Candidates:</strong> {{ config.top_n_candidates }}</p>
+                        <p><strong>Min Threshold:</strong> {{ config.min_threshold_score }}</p>
+                    </div>
+                    <div class="col-md-6">
+                        <p><strong>CV Sources:</strong></p>
+                        <ul class="small">
+                            {% if config.onedrive_enabled %}<li><i class="bi bi-check-circle text-success"></i> OneDrive
+                                ({{ config.onedrive_folder_path }})</li>{% endif %}
+                            {% if config.email_inbox_enabled %}<li><i class="bi bi-check-circle text-success"></i> Email
+                                Inbox</li>{% endif %}
+                            {% if config.email_folder_enabled %}<li><i class="bi bi-check-circle text-success"></i>
+                                Email Folder ({{ config.email_folder_name }})</li>{% endif %}
+                            {% if config.sharepoint_enabled %}<li><i class="bi bi-check-circle text-success"></i>
+                                SharePoint</li>{% endif %}
+                            {% if not config.onedrive_enabled and not config.email_inbox_enabled and not
+                            config.email_folder_enabled and not config.sharepoint_enabled %}
+                            <li class="text-muted">No sources configured</li>
+                            {% endif %}
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    window.atsData = {
+        runScanUrl: "{{ url_for('ats.run_ajax') }}"
+    };
+
+    function runATSScan() {
+        const btn = document.getElementById('runBtn');
+        if (!btn) return;
+
+        const originalHtml = btn.innerHTML;
+        btn.innerHTML = '<i class="bi bi-hourglass-split me-1"></i> Scanning...';
+        btn.disabled = true;
+
+        fetch(window.atsData.runScanUrl, { method: 'POST' })
+            .then(response => response.json())
+            .then(data => {
+                btn.innerHTML = originalHtml;
+                btn.disabled = false;
+
+                if (data.success) {
+                    showToast(`Scan complete! Found ${data.cvs_found} CVs, scored ${data.scored}, filtered ${data.filtered}.`, 'success');
+                    setTimeout(() => location.reload(), 1500);
+                } else {
+                    showToast('Scan failed: ' + data.error, 'danger');
+                }
+            })
+            .catch(error => {
+                btn.innerHTML = originalHtml;
+                btn.disabled = false;
+                showToast('An error occurred during the scan.', 'danger');
+            });
+    }
+</script>
+{% endblock %}

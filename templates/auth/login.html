@@ -1,0 +1,56 @@
+{% extends 'base.html' %}
+
+{% block title %}Login - AI Agents Hub{% endblock %}
+
+{% block content %}
+<div class="min-vh-100 d-flex align-items-center justify-content-center" style="margin-top: -50px;">
+    <div class="card" style="width: 100%; max-width: 420px;">
+        <div class="card-body p-4">
+            <div class="text-center mb-4">
+                <div class="d-inline-flex align-items-center justify-content-center mb-3"
+                    style="width: 64px; height: 64px; background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%); border-radius: 16px;">
+                    <i class="bi bi-robot text-white" style="font-size: 2rem;"></i>
+                </div>
+                <h2 class="fw-bold mb-1">Welcome Back</h2>
+                <p class="text-secondary mb-0">Sign in to your AI Agents Hub</p>
+            </div>
+
+            <form method="POST" action="{{ url_for('auth.login') }}">
+                <div class="mb-3">
+                    <label for="email" class="form-label">Email Address</label>
+                    <input type="email" class="form-control" id="email" name="email" placeholder="you@example.com"
+                        required autofocus>
+                </div>
+
+                <div class="mb-3">
+                    <label for="password" class="form-label">Password</label>
+                    <input type="password" class="form-control" id="password" name="password" placeholder="••••••••"
+                        required>
+                </div>
+
+                <div class="mb-4 d-flex justify-content-between align-items-center">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="remember" name="remember">
+                        <label class="form-check-label text-secondary" for="remember">
+                            Remember me
+                        </label>
+                    </div>
+                </div>
+
+                <button type="submit" class="btn btn-primary w-100 mb-3">
+                    <i class="bi bi-box-arrow-in-right me-2"></i>
+                    Sign In
+                </button>
+            </form>
+
+            <div class="text-center">
+                <span class="text-secondary">Don't have an account?</span>
+                <a href="{{ url_for('auth.register') }}" class="text-decoration-none ms-1"
+                    style="color: var(--accent-primary);">
+                    Create one
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

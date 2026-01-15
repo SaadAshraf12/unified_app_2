@@ -1,0 +1,373 @@
+{% extends 'base.html' %}
+
+{% block title %}Meeting Agent - AI Agents Hub{% endblock %}
+
+{% block extra_css %}
+<style>
+    .chart-container {
+        position: relative;
+        height: 200px;
+    }
+
+    .live-indicator {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-size: 0.8rem;
+        color: var(--accent-success);
+    }
+
+    .live-indicator .dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--accent-success);
+        animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+
+        0%,
+        100% {
+            opacity: 1;
+            transform: scale(1);
+        }
+
+        50% {
+            opacity: 0.5;
+            transform: scale(1.2);
+        }
+    }
+
+    .excluded-tag {
+        display: inline-block;
+        background: rgba(239, 68, 68, 0.15);
+        color: var(--accent-danger);
+        padding: 0.25rem 0.5rem;
+        border-radius: 6px;
+        font-size: 0.75rem;
+        margin: 0.125rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header d-flex justify-content-between align-items-start">
+    <div>
+        <h1 class="page-title">
+            <i class="bi bi-camera-video text-success me-2"></i>
+            Meeting Agent
+        </h1>
+        <p class="page-subtitle">Automatically process Teams meeting transcripts and create ClickUp tasks.</p>
+    </div>
+    <div class="d-flex align-items-center gap-3">
+        {% if config and config.is_enabled %}
+        <span class="live-indicator">
+            <span class="dot"></span>
+            Agent Active
+        </span>
+        {% endif %}
+        {% if is_configured %}
+        <button class="btn btn-primary" onclick="runMeetingScan()" id="runBtn">
+            <i class="bi bi-play-fill me-1"></i>
+            Run Scan Now
+        </button>
+        {% else %}
+        <a href="{{ url_for('meeting.config') }}" class="btn btn-warning">
+            <i class="bi bi-gear me-1"></i>
+            Configure First
+        </a>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Stats -->
+<div class="row g-4 mb-4">
+    <div class="col-md-4 animate-in">
+        <div class="stat-card">
+            <div class="stat-icon success">
+                <i class="bi bi-camera-video-fill"></i>
+            </div>
+            <div class="stat-value">{{ stats.total_processed }}</div>
+            <div class="stat-label">Meetings Processed</div>
+        </div>
+    </div>
+    <div class="col-md-4 animate-in delay-1">
+        <div class="stat-card success">
+            <div class="stat-icon warning">
+                <i class="bi bi-check2-square"></i>
+            </div>
+            <div class="stat-value">{{ stats.tasks_created }}</div>
+            <div class="stat-label">Tasks Created</div>
+        </div>
+    </div>
+    <div class="col-md-4 animate-in delay-2">
+        <div class="stat-card">
+            <div class="stat-icon info">
+                <i class="bi bi-file-text"></i>
+            </div>
+            <div class="stat-value">{{ stats.standup_summaries }}</div>
+            <div class="stat-label">Standup Summaries</div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4">
+    <!-- Weekly Activity Chart -->
+    <div class="col-lg-8 animate-in">
+        <div class="card h-100">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-bar-chart text-success"></i>
+                    Weekly Meeting Activity
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="chart-container">
+                    <canvas id="meetingActivityChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Configuration Summary -->
+    <div class="col-lg-4 animate-in delay-1">
+        <div class="card h-100">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-gear text-secondary"></i>
+                    Configuration
+                </h5>
+                <a href="{{ url_for('meeting.config') }}" class="btn btn-sm btn-outline-secondary">Edit</a>
+            </div>
+            <div class="card-body">
+                <div class="config-item">
+                    <span class="config-label">
+                        <span
+                            class="config-status {{ 'active' if config and config.clickup_list_id else 'inactive' }}"></span>
+                        ClickUp List ID
+                    </span>
+                    <span class="text-muted small">{{ config.clickup_list_id if config and config.clickup_list_id else
+                        'Not set' }}</span>
+                </div>
+                <div class="config-item">
+                    <span class="config-label">
+                        <span
+                            class="config-status {{ 'active' if config and config.target_space_id else 'inactive' }}"></span>
+                        Summary Space
+                    </span>
+                    <span class="text-muted small">{{ config.target_space_id if config and config.target_space_id else
+                        'Not set' }}</span>
+                </div>
+                <div class="config-item">
+                    <span class="config-label">Scan Days Back</span>
+                    <span class="badge bg-info">{{ config.scan_days_back if config else 2 }} days</span>
+                </div>
+                <div class="config-item">
+                    <span class="config-label">Agent Status</span>
+                    {% if config and config.is_enabled %}
+                    <span class="badge bg-success">Enabled</span>
+                    {% else %}
+                    <span class="badge bg-secondary">Disabled</span>
+                    {% endif %}
+                </div>
+
+                {% if config and config.excluded_meeting_names %}
+                <hr class="my-3" style="border-color: var(--border-color);">
+                <h6 class="text-danger small text-uppercase mb-2">
+                    <i class="bi bi-x-circle me-1"></i>
+                    Excluded Meetings ({{ config.excluded_meeting_names | length }})
+                </h6>
+                <div>
+                    {% for name in config.excluded_meeting_names[:5] %}
+                    <span class="excluded-tag">{{ name }}</span>
+                    {% endfor %}
+                    {% if config.excluded_meeting_names | length > 5 %}
+                    <span class="excluded-tag">+{{ config.excluded_meeting_names | length - 5 }} more</span>
+                    {% endif %}
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4 mt-2">
+    <!-- Activity Log -->
+    <div class="col-lg-5 animate-in">
+        <div class="card h-100">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-terminal text-info"></i>
+                    Activity Log
+                </h5>
+            </div>
+            <div class="card-body" style="max-height: 350px; overflow-y: auto;">
+                <div id="activity-log">
+                    {% if recent_logs %}
+                    {% for log in recent_logs %}
+                    <div class="activity-item">
+                        <div
+                            class="activity-icon {% if log.status == 'success' %}bg-success bg-opacity-15 text-success{% elif log.status == 'error' %}bg-danger bg-opacity-15 text-danger{% else %}bg-warning bg-opacity-15 text-warning{% endif %}">
+                            <i
+                                class="bi {% if log.status == 'success' %}bi-check-lg{% elif log.status == 'error' %}bi-x-lg{% else %}bi-exclamation{% endif %}"></i>
+                        </div>
+                        <div class="activity-content">
+                            <div class="activity-text">{{ log.message }}</div>
+                            <div class="activity-time">{{ log.created_at.strftime('%b %d, %H:%M') }}</div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                    {% else %}
+                    <div class="text-center text-muted py-4">
+                        <i class="bi bi-inbox display-6 mb-2"></i>
+                        <p class="mb-0">No activity yet</p>
+                        <small>Run a scan to see logs here</small>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Recent Meetings -->
+    <div class="col-lg-7 animate-in delay-1">
+        <div class="card h-100">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-camera-video text-success"></i>
+                    Recently Processed Meetings
+                </h5>
+                <a href="{{ url_for('meeting.history') }}" class="btn btn-sm btn-outline-secondary">View All</a>
+            </div>
+            <div class="card-body p-0">
+                {% if recent_meetings %}
+                <div class="table-responsive">
+                    <table class="table mb-0">
+                        <thead>
+                            <tr>
+                                <th>Meeting</th>
+                                <th>Tasks</th>
+                                <th>Summary</th>
+                                <th>Date</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for meeting in recent_meetings %}
+                            <tr>
+                                <td class="text-truncate" style="max-width: 200px;">{{ meeting.meeting_subject or
+                                    'Untitled Meeting' }}</td>
+                                <td>
+                                    {% if meeting.tasks_created > 0 %}
+                                    <span class="badge bg-success">{{ meeting.tasks_created }}</span>
+                                    {% else %}
+                                    <span class="badge bg-secondary">0</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if meeting.standup_summary_created %}
+                                    <i class="bi bi-check-circle text-success"></i>
+                                    {% else %}
+                                    <span class="text-muted">—</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-muted small">{{ meeting.processed_at.strftime('%b %d') }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center text-muted py-5">
+                    <i class="bi bi-camera-video-off display-5 mb-3"></i>
+                    <p class="mb-0">No meetings processed yet</p>
+                    <small>Click "Run Scan Now" to start processing meetings</small>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script>
+    // Weekly Activity Chart
+    const meetingActivityCtx = document.getElementById('meetingActivityChart').getContext('2d');
+    const weeklyMeetingsData = {{ weekly_meetings | default ([0, 0, 0, 0, 0, 0, 0]) | tojson }};
+    const weeklyTasksData = {{ weekly_tasks | default ([0, 0, 0, 0, 0, 0, 0]) | tojson }};
+
+    new Chart(meetingActivityCtx, {
+        type: 'bar',
+        data: {
+            labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+            datasets: [
+                {
+                    label: 'Meetings Processed',
+                    data: weeklyMeetingsData,
+                    backgroundColor: 'rgba(16, 185, 129, 0.8)',
+                    borderColor: '#10b981',
+                    borderWidth: 1,
+                    borderRadius: 4
+                },
+                {
+                    label: 'Tasks Created',
+                    data: weeklyTasksData,
+                    backgroundColor: 'rgba(245, 158, 11, 0.8)',
+                    borderColor: '#f59e0b',
+                    borderWidth: 1,
+                    borderRadius: 4
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'top',
+                    labels: { color: '#a0a0b0', usePointStyle: true }
+                }
+            },
+            scales: {
+                x: {
+                    grid: { color: 'rgba(255,255,255,0.05)' },
+                    ticks: { color: '#6c6c7c' }
+                },
+                y: {
+                    beginAtZero: true,
+                    grid: { color: 'rgba(255,255,255,0.05)' },
+                    ticks: { color: '#6c6c7c' }
+                }
+            }
+        }
+    });
+
+    function runMeetingScan() {
+        const btn = document.getElementById('runBtn');
+        const originalHtml = btn.innerHTML;
+        btn.innerHTML = '<i class="bi bi-hourglass-split me-1"></i> Scanning...';
+        btn.disabled = true;
+
+        fetch('{{ url_for("meeting.run_ajax") }}', { method: 'POST' })
+            .then(response => response.json())
+            .then(data => {
+                btn.innerHTML = originalHtml;
+                btn.disabled = false;
+
+                if (data.success) {
+                    showToast('Scan complete! Checked ' + data.meetings_checked + ' meetings, created ' + data.tasks_created + ' tasks.', 'success');
+                    setTimeout(function () { location.reload(); }, 1500);
+                } else {
+                    showToast('Scan failed: ' + data.error, 'danger');
+                }
+            })
+            .catch(function (error) {
+                btn.innerHTML = originalHtml;
+                btn.disabled = false;
+                showToast('An error occurred during the scan.', 'danger');
+            });
+    }
+</script>
+{% endblock %}
