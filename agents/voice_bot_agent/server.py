@@ -107,15 +107,24 @@ class ClickUpSummaryLoader:
     
     async def load_summary(self) -> bool:
         """Load the pre-made summary from ClickUp Doc."""
+        # Debug: Log API key format (first 10 chars only for security)
+        key_preview = self.api_key[:10] if self.api_key else "NONE"
+        logger.info(f"🔑 ClickUp API Key starts with: {key_preview}...")
+        
         try:
             async with httpx.AsyncClient(timeout=30.0) as client:
                 # Get teams
                 response = await client.get(f"{CLICKUP_BASE_URL}/team", headers=self.headers)
+                
+                # Debug: Log full response on error
                 if response.status_code != 200:
+                    logger.error(f"❌ ClickUp /team failed: {response.status_code}")
+                    logger.error(f"   Response: {response.text[:200]}")
                     return False
                 
                 teams = response.json().get("teams", [])
                 if not teams:
+                    logger.warning("No teams found in ClickUp")
                     return False
                 
                 team_id = teams[0]["id"]
