@@ -200,7 +200,7 @@ class MeetingAgentService:
     
     def _get_calendar_events(self, headers, start_iso, end_iso):
         """Get calendar events from Graph API."""
-        url = f"{GRAPH_API}/me/calendarView?startDateTime={start_iso}&endDateTime={end_iso}&$select=id,subject,start,end,onlineMeeting,onlineMeetingUrl,bodyPreview"
+        url = f"{GRAPH_API}/me/calendarView?startDateTime={start_iso}&endDateTime={end_iso}&$select=id,subject,start,end,onlineMeeting,onlineMeetingUrl,bodyPreview,body"
         events = []
         
         while True:
@@ -255,16 +255,39 @@ class MeetingAgentService:
     
     def _extract_join_url(self, ev):
         """Extract Teams join URL from event."""
+        # 1. Standard Properties
         jm = ev.get("onlineMeeting") or {}
         if isinstance(jm, dict) and jm.get("joinUrl"):
             return jm.get("joinUrl")
         url = ev.get("onlineMeetingUrl")
         if url:
             return url
+            
+        # 2. Regex Search patterns
+        patterns = [
+            r"https://teams\.microsoft\.com/l/meetup-join/[^\s\"<>]+",
+            r"https://teams\.microsoft\.com/[^\s\"<>]+"
+        ]
+        
+        # 3. Search Body Preview
         bp = ev.get("bodyPreview") or ""
-        m = re.search(r"https://teams\.microsoft\.com/[^\s\"]+", bp)
-        if m:
-            return m.group(0)
+        for p in patterns:
+            m = re.search(p, bp)
+            if m: return m.group(0)
+            
+        # 4. Search Full Body (HTML)
+        body = ev.get("body") or {}
+        content = body.get("content") or ""
+        if content:
+            # Check hrefs first
+            m_href = re.search(r'href=[\'"](https://teams\.microsoft\.com/l/meetup-join/[^\'"]+)[\'"]', content)
+            if m_href: return m_href.group(1)
+            
+            # Check plain text in body
+            for p in patterns:
+                m = re.search(p, content)
+                if m: return m.group(0)
+                
         return None
     
     def _get_meeting_id_by_join_url(self, headers, join_url):
