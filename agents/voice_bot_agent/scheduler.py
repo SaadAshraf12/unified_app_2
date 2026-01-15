@@ -57,8 +57,19 @@ def check_and_join_meetings(user_id):
         
         for event in events:
             # DEBUG: Log raw event basics
-            logger.info(f"Processing event: {event.get('subject')} (ID: {event.get('id')[-5:]})")
+            subj = event.get('subject') or "No Subject"
             
+            # Deep Debug of Payload
+            is_online = event.get('isOnlineMeeting')
+            om_url = event.get('onlineMeetingUrl')
+            om_prop = event.get('onlineMeeting')
+            body_prev = event.get('bodyPreview') or ""
+            
+            logger.info(f"Processing '{subj}' (ID: {event.get('id')[-5:]})")
+            logger.info(f"   -> isOnline: {is_online} | URL: {om_url}")
+            logger.info(f"   -> onlineMeeting Prop: {om_prop}")
+            logger.info(f"   -> Body Preview: {body_prev[:50]}...")
+
             join_url = ms_service._extract_join_url(event)
             if not join_url:
                 logger.warning(f"-> Skipped: No Join URL found for '{event.get('subject')}'")
