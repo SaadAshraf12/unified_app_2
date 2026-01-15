@@ -56,11 +56,18 @@ def check_and_join_meetings(user_id):
         joined_count = 0
         
         for event in events:
+            # DEBUG: Log raw event basics
+            logger.info(f"Processing event: {event.get('subject')} (ID: {event.get('id')[-5:]})")
+            
             join_url = ms_service._extract_join_url(event)
             if not join_url:
+                logger.warning(f"-> Skipped: No Join URL found for '{event.get('subject')}'")
                 continue
                 
             subject = event.get('subject', 'Untitled')
+            # DEBUG: Log found URL
+            logger.info(f"-> Found URL: {join_url[:30]}...")
+            
             start_dt_str = event['start']['dateTime']
             
             try:
@@ -69,11 +76,11 @@ def check_and_join_meetings(user_id):
                     start_dt = start_dt.replace(tzinfo=timezone.utc)
                 else:
                     start_dt = start_dt.astimezone(timezone.utc)
-            except:
+            except Exception as e:
+                logger.error(f"-> Skipped: Date parse error for '{subject}': {e}")
                 continue
 
             time_to_meeting = (start_dt - now).total_seconds()
-            
             logger.info(f"Event: {subject}, Starts in: {time_to_meeting:.1f}s")
             
             if -300 < time_to_meeting < 180:
