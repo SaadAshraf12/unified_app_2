@@ -30,6 +30,7 @@ def check_and_join_meetings(user_id):
             
         ms_service = MeetingAgentService(user)
         headers = {"Authorization": f"Bearer {token}"}
+        GRAPH_API = "https://graph.microsoft.com/v1.0"
         
         # Time window: Look 5 minutes ahead
         now = datetime.now(timezone.utc)
@@ -62,17 +63,32 @@ def check_and_join_meetings(user_id):
             # Deep Debug of Payload
             is_online = event.get('isOnlineMeeting')
             om_url = event.get('onlineMeetingUrl')
-            om_prop = event.get('onlineMeeting')
-            body_prev = event.get('bodyPreview') or ""
             
             logger.info(f"Processing '{subj}' (ID: {event.get('id')[-5:]})")
             logger.info(f"   -> isOnline: {is_online} | URL: {om_url}")
-            logger.info(f"   -> onlineMeeting Prop: {om_prop}")
-            logger.info(f"   -> Body Preview: {body_prev[:50]}...")
 
             join_url = ms_service._extract_join_url(event)
+            
+            # FALLBACK: Fetch full event if missing URL
             if not join_url:
-                logger.warning(f"-> Skipped: No Join URL found for '{event.get('subject')}'")
+                logger.warning(f"   -> No URL in list view. Fetching full event {event.get('id')[-5:]}...")
+                try:
+                     full_resp = requests.get(f"{GRAPH_API}/me/events/{event['id']}", headers=headers)
+                     if full_resp.status_code == 200:
+                         full_event = full_resp.json()
+                         # Debug body presence
+                         body = full_event.get('body', {})
+                         content = body.get('content', '')
+                         logger.info(f"   -> Fetched Full Body: {len(content)} chars")
+                         
+                         join_url = ms_service._extract_join_url(full_event)
+                         if join_url:
+                             logger.info(f"   -> SUCCESS: Found URL in full event: {join_url[:30]}...")
+                except Exception as e:
+                    logger.error(f"   -> Fetch error: {e}")
+
+            if not join_url:
+                logger.warning(f"-> Skipped: No Join URL found for '{subj}'")
                 continue
                 
             subject = event.get('subject', 'Untitled')
