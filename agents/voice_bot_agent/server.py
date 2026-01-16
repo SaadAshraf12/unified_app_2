@@ -457,6 +457,8 @@ class DeepgramTTSStreamer:
             await self.tts_ws.send(json.dumps({"type": "Clear"}))
         except Exception as e:
             logger.error(f"Failed to send clear: {e}")
+            # Mark as disconnected so we reconnect next time
+            self.is_connected = False
     
     def reset_for_new_response(self):
         self.interrupted = False
@@ -464,6 +466,20 @@ class DeepgramTTSStreamer:
         self.start_time = time.time()
         self.chunks_sent = 0
         self.bytes_sent = 0
+    
+    def is_healthy(self) -> bool:
+        """Check if TTS connection is healthy and ready for new audio."""
+        if not self.is_connected or not self.tts_ws:
+            return False
+        try:
+            # Check if WebSocket is still open
+            if self.tts_ws.closed:
+                self.is_connected = False
+                return False
+            return True
+        except:
+            self.is_connected = False
+            return False
     
     async def close(self):
         self.is_connected = False
@@ -525,14 +541,31 @@ Guidelines:
 - Don't use markdown formatting"""
         }
     
+    async def _ensure_tts_ready(self):
+        """Ensure TTS streamer is connected and healthy. Reconnect if needed."""
+        needs_reconnect = False
+        
+        if not self.tts_streamer:
+            needs_reconnect = True
+        elif not self.tts_streamer.is_healthy():
+            logger.info("🔄 TTS connection unhealthy, reconnecting...")
+            try:
+                await self.tts_streamer.close()
+            except:
+                pass
+            needs_reconnect = True
+        
+        if needs_reconnect:
+            self.tts_streamer = DeepgramTTSStreamer(self.browser_ws)
+            await self.tts_streamer.connect()
+    
     async def stream_llm_to_tts(self):
         """Stream LLM response directly to TTS WebSocket."""
         self.conversation_state.agent_is_speaking = True
         await self.send_state_update()
         
-        if not self.tts_streamer or not self.tts_streamer.is_connected:
-            self.tts_streamer = DeepgramTTSStreamer(self.browser_ws)
-            await self.tts_streamer.connect()
+        # Always ensure TTS is in a healthy state before streaming
+        await self._ensure_tts_ready()
         
         self.tts_streamer.reset_for_new_response()
         full_response = ""
@@ -578,9 +611,7 @@ Guidelines:
     
     async def speak_text(self, text: str):
         """Speak a simple text message."""
-        if not self.tts_streamer or not self.tts_streamer.is_connected:
-            self.tts_streamer = DeepgramTTSStreamer(self.browser_ws)
-            await self.tts_streamer.connect()
+        await self._ensure_tts_ready()
         
         self.tts_streamer.reset_for_new_response()
         await self.tts_streamer.send_text(text)
