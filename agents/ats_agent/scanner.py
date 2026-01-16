@@ -165,7 +165,7 @@ def scan_onedrive_folder(access_token: str, folder_path: str = "CVs") -> List[Di
         return []
 
 
-def scan_email_attachments(access_token: str, folder_name: Optional[str] = None, max_emails: int = 50) -> List[Dict]:
+def scan_email_attachments(access_token: str, folder_name: Optional[str] = None, max_emails: int = 20) -> List[Dict]:
     """
     Scan email attachments for CVs.
     If folder_name is provided, scans that folder. Otherwise scans inbox.
