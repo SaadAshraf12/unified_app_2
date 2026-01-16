@@ -54,6 +54,9 @@ SAMPLE_RATE = 48000
 WAKE_WORDS = ["hello alex", "hey alex", "alex"]
 DISMISSAL_PHRASES = ["that's all", "thanks alex", "goodbye", "bye", "see you", "stop"]
 
+# Speaker diarization settings (for multi-person meetings)
+SPEAKER_LOCK_TIMEOUT = 60  # Seconds before speaker lock expires
+
 # ClickUp configuration
 CLICKUP_SPACE_NAME = "AI Context"
 CLICKUP_SUMMARY_DOC_NAME = "Daily Standup Summary By AI"
@@ -219,14 +222,26 @@ class ConversationState:
     interrupted: bool = False
     memory: MeetingMemory = field(default_factory=MeetingMemory)
     
-    def activate(self):
+    # Speaker diarization tracking
+    active_speaker: Optional[int] = None  # Which speaker ID is talking to bot
+    speaker_lock_time: float = 0  # When the speaker lock started
+    
+    def activate(self, speaker_id: Optional[int] = None):
         self.is_active = True
         self.last_interaction_time = time.time()
         self.interrupted = False
-        logger.info(f"🟢 {BOT_NAME} activated")
+        
+        # Lock to this speaker
+        if speaker_id is not None:
+            self.active_speaker = speaker_id
+            self.speaker_lock_time = time.time()
+            logger.info(f"🟢 {BOT_NAME} activated by Speaker {speaker_id}")
+        else:
+            logger.info(f"🟢 {BOT_NAME} activated")
     
     def deactivate(self):
         self.is_active = False
+        self.active_speaker = None
         logger.info(f"⚪ {BOT_NAME} deactivated")
     
     def reset_for_new_meeting(self):
@@ -234,6 +249,57 @@ class ConversationState:
         self.interrupted = False
         self.recent_responses = []
         self.memory = MeetingMemory()
+        self.active_speaker = None
+        self.speaker_lock_time = 0
+    
+    def is_speaker_locked(self) -> bool:
+        """Check if we're locked to a speaker and lock hasn't expired."""
+        if self.active_speaker is None:
+            return False
+        elapsed = time.time() - self.speaker_lock_time
+        if elapsed > SPEAKER_LOCK_TIMEOUT:
+            logger.info(f"⏱️ Speaker lock expired after {elapsed:.0f}s")
+            self.active_speaker = None
+            self.speaker_lock_time = 0
+            self.is_active = False
+            return False
+        return True
+    
+    def should_respond_to_speaker(self, speaker_id: Optional[int], has_wake_word: bool) -> bool:
+        """
+        Determine if bot should respond to this speaker.
+        Returns True if:
+        - No speaker lock and has wake word (new activation)
+        - Speaker matches active speaker (continuing conversation)
+        - Different speaker but has wake word (takeover)
+        """
+        # If speaker is None (no diarization data), fall back to old behavior
+        if speaker_id is None:
+            return has_wake_word or self.is_active
+        
+        # Check if lock expired
+        if self.is_active and not self.is_speaker_locked():
+            # Lock expired, require new wake word
+            return has_wake_word
+        
+        # Not active: require wake word to activate
+        if not self.is_active:
+            return has_wake_word
+        
+        # Active and locked: only respond to active speaker, OR if new speaker says wake word
+        if speaker_id == self.active_speaker:
+            self.speaker_lock_time = time.time()  # Refresh lock
+            return True
+        
+        # Different speaker: only if they say wake word (takeover)
+        if has_wake_word:
+            logger.info(f"🔄 Speaker takeover: {self.active_speaker} → {speaker_id}")
+            self.active_speaker = speaker_id
+            self.speaker_lock_time = time.time()
+            return True
+        
+        # Different speaker without wake word: ignore
+        return False
     
     def detect_wake_word(self, text: str) -> bool:
         for wake_word in WAKE_WORDS:
@@ -274,7 +340,8 @@ async def connect_to_deepgram_stt():
         "interim_results=true",
         "utterance_end_ms=1000",
         "vad_events=true",
-        "endpointing=300"
+        "endpointing=300",
+        "diarize=true"  # Enable speaker identification for multi-person meetings
     ]
     url = "wss://api.deepgram.com/v1/listen?" + "&".join(params)
     headers = {"Authorization": f"Token {DEEPGRAM_API_KEY}"}
@@ -520,16 +587,30 @@ Guidelines:
         await self.tts_streamer.flush()
         await asyncio.sleep(1.0)
     
-    async def handle_transcript(self, transcript_text: str, is_final: bool):
-        """Handle transcribed text."""
+    async def handle_transcript(self, transcript_text: str, is_final: bool, speaker_id: Optional[int] = None):
+        """Handle transcribed text with speaker awareness for multi-person meetings."""
         transcript_text = transcript_text.strip()
         if not transcript_text:
             return
         
-        # Check for interruption
+        # Check for wake word presence
+        has_wake_word = self.conversation_state.detect_wake_word(transcript_text)
+        
+        # Log speaker info for debugging
+        if speaker_id is not None:
+            logger.debug(f"🗣️ Speaker {speaker_id}: {transcript_text[:30]}...")
+        
+        # Check for interruption (only if active speaker OR has wake word)
         if self.conversation_state.agent_is_speaking:
-            if len(transcript_text.split()) >= 2 or self.conversation_state.detect_wake_word(transcript_text):
-                logger.info(f"🔇 Interruption: {transcript_text[:50]}...")
+            # Only allow interruption if same speaker or wake word detected
+            can_interrupt = (
+                speaker_id is None or  # No diarization data
+                speaker_id == self.conversation_state.active_speaker or
+                has_wake_word
+            )
+            
+            if can_interrupt and (len(transcript_text.split()) >= 2 or has_wake_word):
+                logger.info(f"🔇 Interruption by Speaker {speaker_id}: {transcript_text[:50]}...")
                 self.conversation_state.interrupt()
                 
                 if self.tts_streamer:
@@ -546,21 +627,28 @@ Guidelines:
         if self.conversation_state.is_echo(transcript_text):
             return
         
-        # Wake word detection
+        # Speaker-aware activation/response logic
+        should_respond = self.conversation_state.should_respond_to_speaker(speaker_id, has_wake_word)
+        
+        if not should_respond:
+            # Ignore: different speaker or no wake word
+            if speaker_id is not None and self.conversation_state.active_speaker is not None:
+                logger.debug(f"⚪ Ignoring Speaker {speaker_id} (locked to {self.conversation_state.active_speaker})")
+            return
+        
+        # Activate if not active (wake word detected)
         if not self.conversation_state.is_active:
-            if self.conversation_state.detect_wake_word(transcript_text):
-                self.conversation_state.activate()
-                await self.send_state_update()
-                
-                for wake_word in WAKE_WORDS:
-                    transcript_text = re.sub(r'\b' + re.escape(wake_word) + r'\b', '', transcript_text, flags=re.IGNORECASE)
-                transcript_text = transcript_text.strip() or "Hello"
-            else:
-                return
+            self.conversation_state.activate(speaker_id)
+            await self.send_state_update()
+            
+            # Remove wake word from transcript
+            for wake_word in WAKE_WORDS:
+                transcript_text = re.sub(r'\b' + re.escape(wake_word) + r'\b', '', transcript_text, flags=re.IGNORECASE)
+            transcript_text = transcript_text.strip() or "Hello"
         
         # Dismissal
         if self.conversation_state.detect_dismissal(transcript_text):
-            logger.info("🛑 Dismissal detected")
+            logger.info(f"🛑 Dismissal detected from Speaker {speaker_id}")
             self.conversation_state.interrupt()
             
             if self.tts_streamer:
@@ -576,7 +664,9 @@ Guidelines:
         
         self.conversation_state.last_interaction_time = time.time()
         self.conversation_state.memory.add_bot_interaction("user", transcript_text)
-        logger.info(f"👤 User: {transcript_text}")
+        
+        speaker_label = f"Speaker {speaker_id}" if speaker_id is not None else "User"
+        logger.info(f"👤 {speaker_label}: {transcript_text}")
         
         asyncio.create_task(self.stream_llm_to_tts())
     
@@ -617,8 +707,17 @@ Guidelines:
                             
                             if alternatives:
                                 transcript = alternatives[0].get("transcript", "")
+                                
+                                # Extract speaker ID from diarization
+                                # Deepgram returns words array with speaker field
+                                speaker_id = None
+                                words = alternatives[0].get("words", [])
+                                if words:
+                                    # Use the speaker of the first word
+                                    speaker_id = words[0].get("speaker")
+                                
                                 if transcript:
-                                    await self.handle_transcript(transcript, is_final)
+                                    await self.handle_transcript(transcript, is_final, speaker_id)
                         
                         await browser_ws.send(json.dumps(data))
                     except:
