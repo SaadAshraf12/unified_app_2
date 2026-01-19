@@ -365,6 +365,7 @@ class DeepgramTTSStreamer:
         self.bytes_sent = 0
         self.first_audio_time = None
         self.start_time = None
+        self.needs_reconnect = False  # Set True after clear() to force fresh connection
     
     async def connect(self):
         """Connect to Deepgram TTS WebSocket."""
@@ -449,15 +450,15 @@ class DeepgramTTSStreamer:
             logger.error(f"Failed to send flush: {e}")
     
     async def clear(self):
-        """Send Clear to stop audio."""
+        """Send Clear to stop audio. Flags for reconnection."""
         if not self.is_connected or not self.tts_ws:
             return
         self.interrupted = True
+        self.needs_reconnect = True  # Force fresh connection next time
         try:
             await self.tts_ws.send(json.dumps({"type": "Clear"}))
         except Exception as e:
             logger.error(f"Failed to send clear: {e}")
-            # Mark as disconnected so we reconnect next time
             self.is_connected = False
     
     def reset_for_new_response(self):
@@ -542,25 +543,29 @@ Guidelines:
         }
     
     async def _ensure_tts_ready(self):
-        """Ensure TTS is working. Only reconnect if audio receiver has crashed."""
+        """Ensure TTS is working. Reconnect if needed."""
         needs_reconnect = False
+        reason = ""
         
         if not self.tts_streamer:
             needs_reconnect = True
-            logger.info("🔄 No TTS streamer, creating new connection...")
+            reason = "No TTS streamer exists"
+        elif self.tts_streamer.needs_reconnect:
+            # Flag set after clear() was called - Deepgram needs fresh connection
+            needs_reconnect = True
+            reason = "clear() was called (after interruption)"
         elif not self.tts_streamer.is_connected:
             needs_reconnect = True
-            logger.info("🔄 TTS not connected, reconnecting...")
+            reason = "TTS not marked as connected"
         elif self.tts_streamer.audio_receiver_task and self.tts_streamer.audio_receiver_task.done():
-            # Audio receiver task has crashed/completed - need fresh connection
-            logger.info("🔄 TTS audio receiver died, reconnecting...")
             needs_reconnect = True
+            reason = "Audio receiver task crashed/completed"
         elif self.tts_streamer.tts_ws and self.tts_streamer.tts_ws.closed:
-            # WebSocket closed
-            logger.info("🔄 TTS WebSocket closed, reconnecting...")
             needs_reconnect = True
+            reason = "TTS WebSocket is closed"
         
         if needs_reconnect:
+            logger.info(f"🔄 TTS reconnecting: {reason}")
             if self.tts_streamer:
                 try:
                     await self.tts_streamer.close()
@@ -569,6 +574,7 @@ Guidelines:
             
             self.tts_streamer = DeepgramTTSStreamer(self.browser_ws)
             await self.tts_streamer.connect()
+            logger.info("✅ Fresh TTS connection established")
     
     async def stream_llm_to_tts(self):
         """Stream LLM response directly to TTS WebSocket."""
@@ -580,6 +586,7 @@ Guidelines:
         
         self.tts_streamer.reset_for_new_response()
         full_response = ""
+        tokens_sent = 0
         
         try:
             system_message = self._build_system_message()
@@ -598,17 +605,21 @@ Guidelines:
             
             async for chunk in stream:
                 if self.conversation_state.interrupted:
+                    logger.info(f"⚠️ Interrupted after {tokens_sent} tokens, calling clear()")
                     await self.tts_streamer.clear()
                     break
                 
                 if chunk.choices and chunk.choices[0].delta.content:
                     token = chunk.choices[0].delta.content
                     full_response += token
+                    tokens_sent += 1
                     await self.tts_streamer.send_text(token)
             
             if not self.conversation_state.interrupted:
+                logger.info(f"📤 Sent {tokens_sent} tokens to TTS, flushing...")
                 await self.tts_streamer.flush()
                 await asyncio.sleep(0.5)
+                logger.info(f"✅ Response complete ({len(full_response)} chars)")
             
             if full_response and not self.conversation_state.interrupted:
                 self.conversation_state.memory.add_bot_interaction("assistant", full_response)
