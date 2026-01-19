@@ -542,20 +542,31 @@ Guidelines:
         }
     
     async def _ensure_tts_ready(self):
-        """Ensure TTS streamer is connected and healthy. Reconnect if needed."""
+        """Ensure TTS is working. Only reconnect if audio receiver has crashed."""
         needs_reconnect = False
         
         if not self.tts_streamer:
             needs_reconnect = True
-        elif not self.tts_streamer.is_healthy():
-            logger.info("🔄 TTS connection unhealthy, reconnecting...")
-            try:
-                await self.tts_streamer.close()
-            except:
-                pass
+            logger.info("🔄 No TTS streamer, creating new connection...")
+        elif not self.tts_streamer.is_connected:
+            needs_reconnect = True
+            logger.info("🔄 TTS not connected, reconnecting...")
+        elif self.tts_streamer.audio_receiver_task and self.tts_streamer.audio_receiver_task.done():
+            # Audio receiver task has crashed/completed - need fresh connection
+            logger.info("🔄 TTS audio receiver died, reconnecting...")
+            needs_reconnect = True
+        elif self.tts_streamer.tts_ws and self.tts_streamer.tts_ws.closed:
+            # WebSocket closed
+            logger.info("🔄 TTS WebSocket closed, reconnecting...")
             needs_reconnect = True
         
         if needs_reconnect:
+            if self.tts_streamer:
+                try:
+                    await self.tts_streamer.close()
+                except Exception as e:
+                    logger.debug(f"Error closing old TTS: {e}")
+            
             self.tts_streamer = DeepgramTTSStreamer(self.browser_ws)
             await self.tts_streamer.connect()
     
