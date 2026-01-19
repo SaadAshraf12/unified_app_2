@@ -579,6 +579,7 @@ Guidelines:
     async def stream_llm_to_tts(self):
         """Stream LLM response directly to TTS WebSocket."""
         self.conversation_state.agent_is_speaking = True
+        self.conversation_state.interrupted = False  # Reset for new response!
         await self.send_state_update()
         
         # Always ensure TTS is in a healthy state before streaming
