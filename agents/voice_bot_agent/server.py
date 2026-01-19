@@ -369,7 +369,7 @@ class DeepgramTTSStreamer:
     
     async def connect(self):
         """Connect to Deepgram TTS WebSocket."""
-        url = f"wss://api.deepgram.com/v1/speak?model=aura-2-thalia-en&encoding=linear16&sample_rate={SAMPLE_RATE}"
+        url = f"wss://api.deepgram.com/v1/speak?model=aura-2-orion-en&encoding=linear16&sample_rate={SAMPLE_RATE}"
         headers = {"Authorization": f"Token {DEEPGRAM_API_KEY}"}
         
         logger.info("🔊 Connecting to Deepgram TTS...")
